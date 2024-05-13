@@ -152,7 +152,9 @@ list_tail (struct list *list) {
 
 /* Inserts ELEM just before BEFORE, which may be either an
    interior element or a tail.  The latter case is equivalent to
-   list_push_back(). */
+   list_push_back(). */  
+
+// ELEM을 BEFORE의 바로 앞에 삽입한다. BEFORE는 내부 요소이거나 끝 요소가 될 수 있다.  
 void
 list_insert (struct list_elem *before, struct list_elem *elem) {
 	ASSERT (is_interior (before) || is_tail (before));
@@ -197,7 +199,8 @@ list_push_front (struct list *list, struct list_elem *elem) {
 }
 
 /* Inserts ELEM at the end of LIST, so that it becomes the
-   back in LIST. */
+   back in LIST. */  
+// ELEM을 LIST의 끝에 삽입하여 LIST에서 가장 뒤에 위치하도록 만든다.  
 void
 list_push_back (struct list *list, struct list_elem *elem) {
 	list_insert (list_end (list), elem);

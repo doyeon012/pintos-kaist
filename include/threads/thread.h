@@ -20,7 +20,8 @@ enum thread_status {
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
-typedef int tid_t;
+// 스레드 식별자 유형. 원하는 유형으로 재정의할 수 있다. 커널이 돌아가는 내내 유일하게 유지되는 tid를 가지고 있어야한다.  
+typedef int tid_t;		
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -91,6 +92,7 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int64_t local_tick;					/*add local_tick*/
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -142,5 +144,11 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* add function - gdy*/
+void wake_up(int64_t ticks);
+void thread_sleep(int64_t ticks);
+int64_t get_global_tick(void);
+/* add function - gdy*/
 
 #endif /* threads/thread.h */

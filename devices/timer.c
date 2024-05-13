@@ -70,7 +70,8 @@ timer_calibrate (void) {
 	printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
 }
 
-/* Returns the number of timer ticks since the OS booted. */
+/* Returns the number of timer ticks since the OS booted. */  
+// os 부팅 이후 타이머 틱 수를 반환  
 int64_t
 timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
@@ -81,7 +82,8 @@ timer_ticks (void) {
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
-   should be a value once returned by timer_ticks(). */
+   should be a value once returned by timer_ticks(). */  
+// then 이후 경과된 타이머 틱의 수를 반환, then은 이전에 timer_ticks()가 반환한 값
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -93,8 +95,15 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	/* add code - gdy*/
+	// busy waiting  수정 
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();   
+	//start 값이 유효하지 않을 수 있음을 유의한다.  
+	if (timer_elapsed (start) < ticks){
+		thread_sleep(start + ticks);
+	}
+	/* add code - gdy*/
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -126,6 +135,10 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+	/* add code - gdy*/
+	if ( ticks >= get_global_tick())		
+		wake_up(ticks);
+	/* add code - gdy*/
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
