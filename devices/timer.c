@@ -9,6 +9,7 @@
 #include "threads/thread.h"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
+// TIMER_FREQ: timer interrupt 주파수.
 
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
@@ -83,19 +84,38 @@ timer_ticks (void) {
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
 int64_t
-timer_elapsed (int64_t then) {
+timer_elapsed (int64_t then) { // then 이후 경과된 시간(ticks)을 반환
 	return timer_ticks () - then;
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
-void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+//thread_yield: 현재 스레드를 ready_list에 넣고 다음 스레드를 실행하는 역할을 함.
+//thread_yield() 호출되면, 해당 함수를 호출한 스레드는 다른 스레드에게 CPU를 양보함.
+//timer_sleep: 현재 스레드를 ticks 만큼 재우는 역할을 함.
+//양보한 thread가 다시 실행될 때는 thread_yield()를 호출한 thread가 다시 실행됨. 아직 일어날 때가 안됐다면 바로 양보하고를 계속 반복. -> 양보해준 후 ready_list로 감.
+//일어날 때가 됐는지 계속해서 확인해줌.
+//sleep -> awake -> 시간 확인 -> 다시 sleep -> awake -> 시간 확인 -> awake -> 시간 확인(일어날 시간) -> 깨어남
+//해결 방법? sleep 상태의 thread를 block state로 두어 깨어날 시간이 되기 전까지는 스케줄링에 포함되지 않게 하고, 꺠어날 시간이 되었을 떄 ready state로 바꿔줌.
+//ticks? pintos 내부에서 시간을 나타내기 위한 값. 부팅 이후에 일정 시간마다 1씩 증가.
+//1 tick? 1ms
+// void
+// timer_sleep (int64_t ticks) { 
+// 	int64_t start = timer_ticks ();
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+// 	ASSERT (intr_get_level () == INTR_ON);
+// 	while (timer_elapsed (start) < ticks) //start로부터 지난 tick이 ticks보다 작을 때까지 계속 sleep. tick이 ticks보다 작으면 thread_yield를 호출.
+// 		thread_yield ();
+// 		//ready_list에서 자신의 차례가 된 스레드는 start 이후 경과된 시간이 ticks보다 커질 때까지 thread_yield()를 호출
+// 		//ready_list의 맨 뒤로 이동하기를 반복
+// }
+/* 수정한 함수*/
+void
+timer_sleep(int64_t ticks)
+{
+	int64_t start = timer_ticks();
+	thread_sleep(start + ticks);
 }
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -120,12 +140,20 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
+// static void
+// timer_interrupt (struct intr_frame *args UNUSED) {
+// 	ticks++;
+// 	thread_tick ();
+// }
+/* devices/timer.c */
 static void
-timer_interrupt (struct intr_frame *args UNUSED) {
-	ticks++;
-	thread_tick ();
+timer_interrupt (struct intr_frame *args UNUSED)
+{
+  ticks++; // global ticks를 증가. system 부팅 후 전체적인 시간.
+  thread_tick (); // 스레드의 우선순위를 관리, 다음 실행할 스레드를 선택하는 역할.
+  thread_awake (ticks);	//
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

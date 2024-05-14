@@ -94,8 +94,9 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	int64_t wakeup; //추가한 부분. 꺠어나야 하는 ticks 값
 
-#ifdef USERPROG
+#ifdef USERPROG 
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 #endif
@@ -142,5 +143,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+//추가한 부분. prototype 선언.
+void thread_sleep(int64_t ticks); // ticks 만큼 sleep
+void thread_awake(int64_t ticks); // ticks 만큼 깨움
 
 #endif /* threads/thread.h */
