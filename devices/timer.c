@@ -9,6 +9,7 @@
 #include "threads/thread.h"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
+// TIMER_FREQ: timer interrupt 주파수.
 
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
@@ -83,19 +84,24 @@ timer_ticks (void) {
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
 int64_t
-timer_elapsed (int64_t then) {
+timer_elapsed (int64_t then) { // then 이후 경과된 시간(ticks)을 반환
 	return timer_ticks () - then;
 }
 
-/* Suspends execution for approximately TICKS timer ticks. */
+// 특정한 시간 동안 현재 실행 중인 스레드를 재우기 위해 사용
 void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+timer_sleep(int64_t ticks)
+    {	
+		// 1. 현재 시각 측정
+        int64_t start = timer_ticks(); // 현재 시각
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
-}
+		// 2. 인터럽트 레벨 검사
+        ASSERT(intr_get_level() == INTR_ON);
+        
+		// 3. 스레드 재우기
+		thread_sleep(start + ticks); // 현재 시각 (start) + 잠들 시간 (ticks)
+    }
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -120,12 +126,14 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
-/* Timer interrupt handler. */
+
+// 매 tick마다 깨울 스레드가 있는지 확인.
 static void
-timer_interrupt (struct intr_frame *args UNUSED) {
-	ticks++;
-	thread_tick ();
+timer_interrupt (struct intr_frame *args UNUSED)
+{
+  ticks++; 
+  thread_tick (); // 스레드의 우선순위를 관리, 다음 실행할 스레드를 선택하는 역할.
+  thread_wakeup(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

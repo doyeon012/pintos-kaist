@@ -26,7 +26,11 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+
+// ready, sleep list 선언
+static struct list ready_list; 
+static struct list sleep_list;
+
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -92,8 +96,9 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
+//THREAD_RUNNING 상태로 만듦. 한 번에 하나의 스레드만 running 상태를 가질 수 있음.
 void
-thread_init (void) {
+thread_init (void) { 
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* Reload the temporal gdt for the kernel
@@ -108,6 +113,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list); // 추가한 부분
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -119,18 +125,24 @@ thread_init (void) {
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
+// idle thread를 생성하고, 동시에 idle 함수가 실행.
+// idle thread는 한 번 schedule을 받고, sema_up을 하여 thread_start()의 마지막 sema_down을 풀어주어
+// thread_start가 작업을 끝나고 run_action()이 실행될 수 있도록 해주고, idle 자신은 block이 된다.
+// idle thread는 pinots에서 실행 가능한 thread가 하나도 없을 때 wake되어 다시 작동하는데, 이는 무조건 하나의 thread는 실행하고 있는 상태를
+// 만들기 위함이다.
 void
 thread_start (void) {
-	/* Create the idle thread. */
+	/* Create the idle thread. */ //idle thread(메인 스레드)를 생성.
+	//본격적으로 thread를 시작함. 
 	struct semaphore idle_started;
-	sema_init (&idle_started, 0);
+	sema_init (&idle_started, 0);//세마포어 초기화. 세마포어는 0으로 초기화되어 있음.
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
-	intr_enable ();
+	intr_enable ();// 인터럽트를 활성화. 인터럽트를 활성화하면 타이머 인터럽트가 발생하고, 타이머 인터럽트 핸들러가 실행됨.
 
 	/* Wait for the idle thread to initialize idle_thread. */
-	sema_down (&idle_started);
+	sema_down (&idle_started); // sema_down: 세마포어를 내리는 함수. 세마포어가 0이 될 때까지 기다림.
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -185,7 +197,7 @@ thread_create (const char *name, int priority,
 	ASSERT (function != NULL);
 
 	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO);
+	t = palloc_get_page (PAL_ZERO); // 페이지 할당
 	if (t == NULL)
 		return TID_ERROR;
 
@@ -210,12 +222,95 @@ thread_create (const char *name, int priority,
 	return tid;
 }
 
+
+// 알람 때 구현한 것 1. 정렬, 2. 재우기, 3. 깨우기
+// 슬립 큐에 스레드 추가시 'wakeup_ticks'값(각 스레드가 깨어야 할 시간.)에 따라 올바른 순서로 정렬
+bool cmp_thread_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+    {	
+		// 'list_elen'포인터 and 'struct thread' 구조체 내에서 'list_elem'의 오프셋을 사용하여 'struct thread'포인터 계산
+        struct thread *st_a = list_entry(a, struct thread, elem);
+        struct thread *st_b = list_entry(b, struct thread, elem);
+        
+		return st_a->wakeup_ticks < st_b->wakeup_ticks; // a가 b보다 더 일찍 깨어야 함
+    }
+
+
+// 특정 시간 동안 현재 실행 중인 스레들을 재우기 위해
+// 주어진 틱 수 동안 스레드를 일시 중단하고, 지정된 시간이 지나면 깨운다.
+// 틱(타이머 인터럽트 발생 주기)
+void 
+thread_sleep(int64_t ticks)
+    {
+        struct thread *curr;
+        enum intr_level old_level;
+
+		// 1. 인터럽트 비활성화
+        old_level = intr_disable(); 
+
+
+		// 2. 현재 스레드 가져오기
+        curr = thread_current();     
+
+		// 3. 스레드 검사(현재 스레드가 idle이 아닐때만)
+        ASSERT(curr != idle_thread); 
+
+		// 4. 일어날 시각 설정
+        curr->wakeup_ticks = ticks;
+
+		// 5. sleep_list에 스레드 추가   
+        list_insert_ordered(&sleep_list, &curr->elem, cmp_thread_ticks, NULL); // sleep_list에 추가
+        
+		// 6. 스레드 블록(재우기) - 블록 처리
+		thread_block(); // 
+
+		// 7. 인터럽트 복원
+        intr_set_level(old_level); 
+    }
+
+// sleep_list에 있는 스레드들이 깨어날 시간이 되었는지 확인, 해당 시간이 되었을 때
+// 스레드들을 'ready_list'로 이동시키는 역할.
+void 
+thread_wakeup(int64_t current_ticks)
+    {
+        enum intr_level old_level;
+
+		// 1. 인터럽트 비활성화
+        old_level = intr_disable(); 
+
+        struct list_elem *curr_elem = list_begin(&sleep_list);
+
+		// 2. 'sleep_list' 순회
+        while (curr_elem != list_end(&sleep_list))
+        {
+            struct thread *curr_thread = list_entry(curr_elem, struct thread, elem); // 현재 검사중인 elem의 스레드
+			
+			// 3. 스레드 깨우기
+            if (current_ticks >= curr_thread->wakeup_ticks)
+            {	
+				// 4. 순회 계속(sleep_list에서 제거, curr_elem에는 다음 elem이 담김)
+                curr_elem = list_remove(curr_elem); 
+                
+				// 3. 스레드 깨우기(ready_list로 이동)
+				thread_unblock(curr_thread);       
+            }
+            else
+                break;
+        }
+
+		// 5. 인터럽트 복원
+        intr_set_level(old_level); // 인터럽트 상태를 원래 상태로 변경
+    }
+
+
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
+// THREAD_BLOCKED. 멈춰서 아직 실행 불가능한 상태.
+// thread_unblock()을 통해 실행가능한 상태가 되면 THREAD_READY가 되어 ready_queue에 들어감.
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
@@ -233,16 +328,18 @@ thread_block (void) {
    it may expect that it can atomically unblock a thread and
    update other data. */
 void
-thread_unblock (struct thread *t) {
+thread_unblock (struct thread *t) { // parameter로 주어진 t를 차단해제하고, ready 상태로 전환, ready_list에 추가하는 기능을 수행.
 	enum intr_level old_level;
 
 	ASSERT (is_thread (t));
 
-	old_level = intr_disable ();
-	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
-	t->status = THREAD_READY;
-	intr_set_level (old_level);
+	// 현재 인터럽트를 비활성화. 이전의 인터럽트 level을 old_level에 저장. 
+	// 이 것은 critical section에 들어가는 것으로 스레드가 상태를 변경하는 동안 다른 interrupt가 발생하지 않도록 보장.
+	old_level = intr_disable (); 
+	ASSERT (t->status == THREAD_BLOCKED); // 현재 t가 차단된 상태인지 확인.
+	list_push_back (&ready_list, &t->elem); 
+	t->status = THREAD_READY; 
+	intr_set_level (old_level); // 인터럽트 레벨을 이전 상태로 복원한다. 이전에 비활성화된 인터럽트를 다시 활성화하는 것으로, critical section을 빠져나오는 것을 의미한다.
 }
 
 /* Returns the name of the running thread. */
@@ -256,7 +353,7 @@ thread_name (void) {
    See the big comment at the top of thread.h for details. */
 struct thread *
 thread_current (void) {
-	struct thread *t = running_thread ();
+	struct thread *t = running_thread (); //현재 실행 중인 스레드를 가져옴.
 
 	/* Make sure T is really a thread.
 	   If either of these assertions fire, then your thread may
@@ -277,6 +374,7 @@ thread_tid (void) {
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
+// THREAD_DYING 상태로 만듦. 스레드를 종료시키는 함수.
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
@@ -295,7 +393,7 @@ thread_exit (void) {
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
-thread_yield (void) {
+thread_yield (void) { 
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
@@ -303,9 +401,9 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
+		list_push_back (&ready_list, &curr->elem); //현재 스레드를 ready_list에 넣음.
+	do_schedule (THREAD_READY); // 스케줄러에게 현재 스레드가 ready_list에 추가되었음을 알림.
+	intr_set_level (old_level); // 이전 인터럽트 레벨을 다시 복원하여 이전 상태로 복원함.
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -385,12 +483,15 @@ idle (void *idle_started_ UNUSED) {
 }
 
 /* Function used as the basis for a kernel thread. */
+// thread 동작의 전부. thread를 생성하고, thread를 실행하는 함수.
+// aux? synchronization을 위한 semaphore 등이 나옴.
+// 목적? idle thread(main thread) 위에 여러 thread들이 동시에 실행되도록 만드는 것.
 static void
 kernel_thread (thread_func *function, void *aux) {
 	ASSERT (function != NULL);
 
 	intr_enable ();       /* The scheduler runs with interrupts off. */
-	function (aux);       /* Execute the thread function. */
+	function (aux);       /* Execute the thread function. thread가 종료될 때까지 실행되는 main 함수 역할*/
 	thread_exit ();       /* If function() returns, kill the thread. */
 }
 

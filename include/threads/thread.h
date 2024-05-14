@@ -94,8 +94,9 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	int64_t wakeup_ticks;       // 일어날 시각 추가(각 스레드 마다 존재)
 
-#ifdef USERPROG
+#ifdef USERPROG 
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 #endif
@@ -143,4 +144,8 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+//추가한 부분. prototype 선언.
+void thread_sleep (int64_t ticks);
+void thread_wakeup (int64_t global_ticks);
+bool cmp_thread_ticks(const struct list_elem *a, const struct list_elem *b, void *aux);
 #endif /* threads/thread.h */
