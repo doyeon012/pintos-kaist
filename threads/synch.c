@@ -33,8 +33,9 @@
 #include "threads/thread.h"
 
 /* add function- gdy2*/
-bool new_cmp_priority(const struct list_elem *a_, const struct list_elem *b_,
+bool new_cmp_priority(struct list_elem *a_, struct list_elem *b_,
 					  void *aux UNUSED);
+
 /* add function- gdy2*/
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
@@ -208,8 +209,19 @@ void lock_acquire(struct lock *lock)
 	ASSERT(!intr_context());
 	ASSERT(!lock_held_by_current_thread(lock));
 
+	if (lock->holder != NULL){		// 해당 lock이 null 일경우// 
+		struct thread *curr = thread_current();
+		curr->wait_on_lock = lock;
+		list_insert_ordered(&lock->holder->donations,&curr->d_elem, cmp_priority_donation, NULL);
+		// 우선순위 기부 
+		struct thread *donation_first = list_entry(list_begin(&lock->holder->donations), struct thread, d_elem);
+		if (lock->holder->priority < donation_first->priority){
+			lock->holder->priority = donation_first->priority;
+		} 
+	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
+	thread_current()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -243,6 +255,28 @@ void lock_release(struct lock *lock)
 	ASSERT(lock != NULL);
 	ASSERT(lock_held_by_current_thread(lock));		// 현재 쓰레드가 lock을 보유하고 있는지 확인 
 
+	struct thread *curr = lock->holder; 
+	struct list_elem *donation_elem= list_begin(&curr->donations); 
+
+	while(!list_empty(&curr ->donations) && donation_elem != list_tail(&curr->donations)){
+		struct thread *donation_thread = list_entry(donation_elem, struct thread, d_elem);
+		if (donation_thread->wait_on_lock == lock){
+			donation_elem = list_remove(donation_elem);
+		}
+		else{
+			donation_elem = donation_elem->next;
+		}
+	}
+	// 우선 순위 기부 
+	if (!list_empty(&curr->donations)){
+		struct thread *donation_first = list_entry(list_begin(&curr->donations), struct thread, d_elem);
+			if (curr->priority < donation_first->priority){
+				curr->priority = donation_first->priority;
+			} 
+	}
+	else{
+		curr->priority = curr ->org_priority;
+	}
 	lock->holder = NULL;
 	sema_up(&lock->semaphore);
 }
@@ -356,7 +390,7 @@ void cond_broadcast(struct condition *cond, struct lock *lock)
 }
 
 /* add function - gdy2 */
-bool new_cmp_priority(const struct list_elem *a_, const struct list_elem *b_,
+bool new_cmp_priority(struct list_elem *a_, struct list_elem *b_,
 					  void *aux UNUSED)
 {
 	struct semaphore_elem *a = list_entry(a_, struct semaphore_elem, elem);

@@ -94,11 +94,13 @@ struct thread
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
 
+	int org_priority;
+
 	int64_t local_tick; /*add local_tick*/
 
-	// struct lock *wait_on_lock; /* add wait_on_lock */
-	// struct list_elem d_elem;   /* add d_elem */
-	// struct list donations;	   /* add donations */
+	struct lock *wait_on_lock; /* add wait_on_lock */
+	struct list_elem d_elem;   /* add d_elem */
+	struct list donations;	   /* add donations */
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
@@ -158,6 +160,8 @@ int64_t get_global_tick(void);
 bool cmp_priority(const struct list_elem *a_, const struct list_elem *b_,
 				  void *aux UNUSED);
 void thread_preemtive(void);
+bool cmp_priority_donation(const struct list_elem *a_, const struct list_elem *b_,
+				  void *aux UNUSED);
 /* add function - gdy*/
 
 #endif /* threads/thread.h */
