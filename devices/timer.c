@@ -136,8 +136,10 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 	/* add code - gdy*/
-	if ( ticks >= get_global_tick())		
+	while( ticks >= get_global_tick())		// local_tick이 같은 경우도 처리해줘야하므로 반복문을 실행한다. 
+	{		
 		wake_up(ticks);
+	}
 	/* add code - gdy*/
 }
 
