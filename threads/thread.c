@@ -57,7 +57,11 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 bool cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);//추가한 부분
-void thread_preemption(void);//추가한 부분
+void thread_preemptive(void);//추가한 부분
+void remove_with_lock(struct lock *lock);//추가한 부분
+void revert_priority(void);//추가한 부분
+bool cmp_donate_priority(const struct list_elem *a, const struct list_elem *b,  void *aux UNUSED);//추가한 부분
+void donate_priority(void);//추가한 부분
 
 
 static void kernel_thread (thread_func *, void *aux);
@@ -172,7 +176,7 @@ thread_print_stats (void) {
 }
 /*추가한 부분*/
 void
-thread_preemption(void){
+thread_preemptive(void){
 	if(!list_empty(&ready_list) && (thread_current ()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority))
 		thread_yield();
 }
@@ -222,7 +226,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	thread_preemption(); //ready_list의 앞 부분과 비교해서 ready_list의 값이 더 클 경우 yield
+	thread_preemptive(); //ready_list의 앞 부분과 비교해서 ready_list의 값이 더 클 경우 yield
 
 	return tid;
 }
@@ -379,8 +383,10 @@ cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
 /* Sets the current thread's priority to NEW_PRIORITY. 수정 부분*/
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	thread_preemption(); //ready_list의 앞 부분과 비교해서 ready_list의 값이 더 클 경우 yield
+	thread_current ()->init_priority = new_priority;//추가한 부분
+	// thread_current ()->priority = new_priority;
+	revert_priority();
+	thread_preemptive(); //ready_list의 앞 부분과 비교해서 ready_list의 값이 더 클 경우 yield
 }
 
 /* Returns the current thread's priority. */
@@ -481,6 +487,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	//
+	//donations를 위해 추가한 부분. init_priority, wait_on_lock, donations 초기화
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&(t->donations));
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -659,4 +670,51 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+//donation을 위해 추가한 함수.
+//추가한 부분. lock을 가지고 있는 스레드가 우선순위를 양도하는 함수.
+bool
+cmp_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	return list_entry(a, struct thread, donation_elem)->priority > list_entry(b, struct thread, donation_elem)->priority;
+}
+//dontations에서 스레드를 지움
+void
+remove_with_lock (struct lock *lock)
+{
+  struct list_elem *e;
+  struct thread *cur = thread_current ();
+
+  for (e = list_begin (&cur->donations); e != list_end (&cur->donations); e = list_next (e)){
+    struct thread *t = list_entry (e, struct thread, donation_elem);
+    if (t->wait_on_lock == lock)
+      list_remove (&t->donation_elem);
+  }
+}
+//추가한 부분
+void
+revert_priority(void){
+	struct thread *cur = thread_current ();
+	cur->priority = cur->init_priority;
+	if (!list_empty (&cur->donations)) {
+    	list_sort (&cur->donations, cmp_donate_priority, 0);
+
+    	struct thread *front = list_entry (list_front (&cur->donations), struct thread, donation_elem);
+    if (front->priority > cur->priority)cur->priority = front->priority;
+		
+  }
+}
+//추가한 부분
+void
+donate_priority(void){
+	int depth;
+	struct thread *cur = thread_current();
+
+	for(depth = 0; depth < 8; depth++){
+		if(!cur->wait_on_lock){
+			break;
+		}
+		struct thread *holder = cur->wait_on_lock->holder;
+		holder->priority = cur->priority;
+		cur = holder;
+	}
 }

@@ -96,6 +96,13 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	int64_t wakeup; //추가한 부분. 꺠어나야 하는 ticks 값
 
+	/* 스레드마다 양도받은 내역을 관리할 수 있는 내역*/
+	int init_priority; //추가한 부분. 초기 우선순위값. 우선순위 복원 시 사용
+	struct lock *wait_on_lock; //추가한 부분. 스레드가 기다리는 lock
+	struct list donations; //추가한 부분. 자신에게 priority를 나눠준 thread list
+	struct list_elem donation_elem; //추가한 부분. 우선순위 기부 리스트의 element
+
+
 #ifdef USERPROG 
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -148,4 +155,10 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep(int64_t ticks); // ticks 만큼 sleep
 void thread_awake(int64_t ticks); // ticks 만큼 깨움
 
+bool cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);//추가한 부분
+void thread_preemptive(void);//추가한 부분
+bool cmp_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);//추가한 부분
+void revert_priority(void);//추가한 부분 
 #endif /* threads/thread.h */
