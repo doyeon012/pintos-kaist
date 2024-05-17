@@ -102,7 +102,6 @@ timer_sleep(int64_t ticks)
 		thread_sleep(start + ticks); // 현재 시각 (start) + 잠들 시간 (ticks)
     }
 
-
 /* Suspends execution for approximately MS milliseconds. */
 void
 timer_msleep (int64_t ms) {
@@ -133,6 +132,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++; 
   thread_tick (); // 스레드의 우선순위를 관리, 다음 실행할 스레드를 선택하는 역할.
+  
   thread_wakeup(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
 }
 
