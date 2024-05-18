@@ -90,7 +90,7 @@ void sema_down(struct semaphore *sema)
 
    This function may be called from an interrupt handler. */
 
-// 세마포어의 value 값이 0보다 클 경우 true 반환 
+// 세마포어의 value 값이 0보다 클 경우 true 반환
 bool sema_try_down(struct semaphore *sema)
 {
 	enum intr_level old_level;
@@ -123,14 +123,14 @@ void sema_up(struct semaphore *sema)
 	ASSERT(sema != NULL);
 
 	old_level = intr_disable();
-	if (!list_empty(&sema->waiters))		// sema->waiter 리스트가 비어있지 않을 경우
+	if (!list_empty(&sema->waiters)) // sema->waiter 리스트가 비어있지 않을 경우
 	{
 		list_sort(&sema->waiters, cmp_priority, NULL);
 		thread_unblock(list_entry(list_pop_front(&sema->waiters),
 								  struct thread, elem));
 	}
 	sema->value++;
-	thread_preemtive();		// wait_list에서 ready_list로 넣어준 thread의 우선순위가 현재 실행중인 thread의 우선순위 보다 높을 수 있으므로 context_switching이 일어나는지 확인한다.   
+	thread_preemtive(); // wait_list에서 ready_list로 넣어준 thread의 우선순위가 현재 실행중인 thread의 우선순위 보다 높을 수 있으므로 context_switching이 일어나는지 확인한다.
 	intr_set_level(old_level);
 }
 
@@ -209,15 +209,25 @@ void lock_acquire(struct lock *lock)
 	ASSERT(!intr_context());
 	ASSERT(!lock_held_by_current_thread(lock));
 
-	if (lock->holder != NULL){		// 해당 lock이 null 일경우// 
-		struct thread *curr = thread_current();
+	if (lock->holder != NULL)
+	{											// 해당 lock을 다른 쓰레드가 점유하고 있을 경우
+		struct thread *curr = thread_current(); // donations 목록에 들어가야 하는 쓰레드 = curr
 		curr->wait_on_lock = lock;
-		list_insert_ordered(&lock->holder->donations,&curr->d_elem, cmp_priority_donation, NULL);
-		// 우선순위 기부 
-		struct thread *donation_first = list_entry(list_begin(&lock->holder->donations), struct thread, d_elem);
-		if (lock->holder->priority < donation_first->priority){
-			lock->holder->priority = donation_first->priority;
-		} 
+		list_insert_ordered(&lock->holder->donations, &curr->d_elem, cmp_priority_donation, NULL); // 현재 주어진 lock을 기다리는 donation목록에 curr->d_lem 추가(오름차순으로 정렬 됨)
+		// 우선순위 기부
+		if(!thread_mlfqs){
+			struct thread *donation_first;	   // lock을 가지고 있는 쓰레드의 도네이션 목록에 =>>가장 우선순위가 높은 쓰레드
+			while (curr->wait_on_lock != NULL) // nested 상황을 고려하여 while문을 사용 wait_on_lock을 가지고 있지 않은 쓰레드가 나올 때 까지 반복
+			{
+				struct lock *new_lock = curr->wait_on_lock; // 새로운 lock 구조체를 선언하여 lock을 갱신 해준다.		// 새로 선언을 해주지 않고 그냥 lock을 써서 갱신이 되지 않았었다.
+				donation_first = list_entry(list_begin(&new_lock->holder->donations), struct thread, d_elem);
+				if (new_lock->holder->priority < donation_first->priority)
+				{
+					new_lock->holder->priority = donation_first->priority; // donation의 첫번째 값과 우선순위를 비교하여 조정
+				}
+				curr = curr->wait_on_lock->holder; // 현재 쓰레드의 wait_on_lock의 holder가 가리키는 쓰레드로 이동 하여 연결된 쓰레드들의 priority값 조정
+			}
+		}
 	}
 	sema_down(&lock->semaphore);
 	lock->holder = thread_current();
@@ -253,32 +263,50 @@ bool lock_try_acquire(struct lock *lock)
 void lock_release(struct lock *lock)
 {
 	ASSERT(lock != NULL);
-	ASSERT(lock_held_by_current_thread(lock));		// 현재 쓰레드가 lock을 보유하고 있는지 확인 
+	ASSERT(lock_held_by_current_thread(lock)); // 현재 쓰레드가 lock을 보유하고 있는지 확인
 
-	struct thread *curr = lock->holder; 
-	struct list_elem *donation_elem= list_begin(&curr->donations); 
+	struct thread *curr = lock->holder; // 해제할 lock을 가지고 있는 쓰레드 curr
+	struct list_elem *donation_elem = list_begin(&curr->donations);		// 해제할 lock을 기다리고 있는 쓰레드들의 우선순위가 가장 높은 list_elem => donation_elem
 
-	while(!list_empty(&curr ->donations) && donation_elem != list_tail(&curr->donations)){
+	while (!list_empty(&curr->donations) && donation_elem != list_tail(&curr->donations))		// donation이 empty가 아니고, donation_elem이 tail이 아닐 때까지 
+	{																						 	// lock을 가지고 있던 쓰레드의 donations 목록에 wait_on_lock으로 lock을 가지고 있던 쓰레도 모두 삭제
 		struct thread *donation_thread = list_entry(donation_elem, struct thread, d_elem);
-		if (donation_thread->wait_on_lock == lock){
-			donation_elem = list_remove(donation_elem);
+		if (donation_thread->wait_on_lock == lock)
+		{
+			donation_elem = list_remove(donation_elem);		// 해당 쓰레드 삭제하고 remove로 반환된 elem값을 donation_elem으로 받아서 donation_elem 갱신 
 		}
-		else{
-			donation_elem = donation_elem->next;
+		else
+		{
+			donation_elem = donation_elem->next;		// wait_on_lock 값이 lock이 아닌 쓰레드라면 다음 쓰레드로 donation_elem 갱신  
 		}
 	}
-	// 우선 순위 기부 
-	if (!list_empty(&curr->donations)){
-		struct thread *donation_first = list_entry(list_begin(&curr->donations), struct thread, d_elem);
-			if (curr->priority < donation_first->priority){
-				curr->priority = donation_first->priority;
-			} 
+	// 우선 순위 기부
+	// do - while 문을 사용하여 갱신이 안되는 경우가 없도록 하였다. 
+	if (!thread_mlfqs){
+		do
+		{
+			curr->priority = curr->org_priority;		// 기부 받았던 priority를 반납  
+			if (!list_empty(&curr->donations))		// donations가 비어있지 않을 경우 갱신된 donations 리스트에서 첫번째 값으로 우선순위 갱신 
+			{
+				struct thread *donation_first = list_entry(list_begin(&curr->donations), struct thread, d_elem);
+				if (curr->priority < donation_first->priority)
+				{
+					curr->priority = donation_first->priority;
+				}
+			}
+			// donations가 비어있을 경우 
+			// while문 들어가기전이므로 wait_on_lock이 있는지 확인한다. 
+			// 이 조건이 없으면 wait_on_lock이 null일 경우 holder를 찾지 못해 error가 나타난다.  
+			if (curr->wait_on_lock == NULL)
+			{
+				break;
+			}
+			curr = curr->wait_on_lock->holder;		// wait_on_lock이 null이 아닐경우 holder 쓰레드로 이동한다.  
+		} while (curr->wait_on_lock != NULL);
 	}
-	else{
-		curr->priority = curr ->org_priority;
-	}
-	lock->holder = NULL;
-	sema_up(&lock->semaphore);
+	//  
+	lock->holder = NULL;		// lock 해제 
+	sema_up(&lock->semaphore);	
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -330,7 +358,7 @@ void cond_init(struct condition *cond)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-   
+
 /* 조건 변수의 신호를 기다린다. */
 void cond_wait(struct condition *cond, struct lock *lock)
 {
@@ -339,7 +367,7 @@ void cond_wait(struct condition *cond, struct lock *lock)
 	ASSERT(cond != NULL);
 	ASSERT(lock != NULL);
 	ASSERT(!intr_context());
-	ASSERT(lock_held_by_current_thread(lock));	// 현재 쓰레드가 lock을 보유하면 true 반환 
+	ASSERT(lock_held_by_current_thread(lock)); // 현재 쓰레드가 lock을 보유하면 true 반환
 
 	sema_init(&waiter.semaphore, 0);
 	// list_push_back (&cond->waiters, &waiter.elem);

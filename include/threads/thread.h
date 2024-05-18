@@ -100,7 +100,10 @@ struct thread
 
 	struct lock *wait_on_lock; /* add wait_on_lock */
 	struct list_elem d_elem;   /* add d_elem */
+	struct list_elem all_elem; /* all_elem*/
 	struct list donations;	   /* add donations */
+	int nice;				   /*add struct*/
+	int recent_cpu;		   /*add struct*/
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
@@ -161,7 +164,14 @@ bool cmp_priority(const struct list_elem *a_, const struct list_elem *b_,
 				  void *aux UNUSED);
 void thread_preemtive(void);
 bool cmp_priority_donation(const struct list_elem *a_, const struct list_elem *b_,
-				  void *aux UNUSED);
+						   void *aux UNUSED);
+
+void calculate_priority(struct thread *t);
+void calculate_recent_cpu(struct thread *t);
+int calculate_load_average();
+void up_recent_cpu(struct thread *t);
+void recalculate_all();
+void recalculate_priority();
 /* add function - gdy*/
 
 #endif /* threads/thread.h */
