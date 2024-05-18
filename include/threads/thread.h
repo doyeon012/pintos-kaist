@@ -88,14 +88,19 @@ typedef int tid_t;
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
-	enum thread_status status;          /* Thread state. */
+	enum thread_status status;          // 스레드 상태
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
+	int priority;                       // 스레드 우선순위
+
+	int original_priority; // 원래 우선순위
+
+	struct list donations; // 우선 순위 기부 리스트 - 우선순위 역전 방지하기 위해 스레드들이 우선순위를 기부할 수 있다.
+	struct list_elem d_elem; // 도네이션 리스트 요소 - 스레드가 도네이션에 들어갈 때 사용할 리스트 요소
+	struct lock *wait_on_lock; // 대기 중인 락
 
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
-	int64_t wakeup_ticks;       // 일어날 시각 추가(각 스레드 마다 존재)
-
+	struct list_elem elem;              // 스레드가 여러 리스트(ready_list, wait_list)에 들어갈 때 사용할 수 있는 리스트 요소
+	int64_t wakeup_ticks;       // 일어날 시각
 #ifdef USERPROG 
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -148,4 +153,9 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep (int64_t ticks);
 void thread_wakeup (int64_t global_ticks);
 bool cmp_thread_ticks(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+bool cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+bool donation_cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+void thread_preemption(void);
+
 #endif /* threads/thread.h */

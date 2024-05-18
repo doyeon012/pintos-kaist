@@ -32,6 +32,7 @@ static struct list ready_list;
 static struct list sleep_list;
 
 
+
 // CPU가 유휴 상태일 때 실행되는 스레드
 static struct thread *idle_thread;
 
@@ -61,6 +62,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 
 bool cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+bool donation_cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
 void thread_preemption(void);
 
 static void kernel_thread (thread_func *, void *aux);
@@ -257,6 +259,11 @@ cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
 	return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
 }
 
+bool
+donation_cmp_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
+	return list_entry(a, struct thread, d_elem)->priority > list_entry(b, struct thread, d_elem)->priority;
+}
+
 // 알람 때 구현한 것 1. 정렬, 2. 재우기, 3. 깨우기
 // 슬립 큐에 스레드 추가시 'wakeup_ticks'값(각 스레드가 깨어야 할 시간.)에 따라 올바른 순서로 정렬
 // 각 스레드가 깨어야 할 시간 비교, 내림차순
@@ -445,13 +452,31 @@ thread_yield (void) {
 	intr_set_level (old_level); // 인터럽트 복원
 }
 
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 // 현재 스레드의 우선순위를 new_priority로 변경
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	thread_preemption(); // 리스트 앞 부분과 비교해서 read_list의 값이 더 클 경우 yield
 
+	// 1. 현재 실행 중인 스레드 가져오기
+	struct thread *curr = thread_current();
+
+	// 원래 우선 순위 설정
+	curr->original_priority = new_priority;
+	// update_priority_for_donations();
+
+	 // 3. 조건 확인 및 우선순위 설정
+	 if(list_empty(&curr->donations) || new_priority > curr->priority) // 새로운 우선순위가 현재 우선순위보다 높은지
+	 {
+	 	// 4. 우선순위 업데이트
+	 	curr->priority = new_priority;
+	 }
+	 else
+	 {
+	 	curr->priority = list_entry(list_front(&curr->donations), struct thread,d_elem)->priority;
+	 }
+
+	thread_preemption(); //리스트 앞 부분과 비교해서 read_list의 값이 더 클 경우 yield
 }
 
 /* Returns the current thread's priority. */
@@ -554,8 +579,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
-	t->priority = priority;
+
+	t->priority = priority; // 우선순위 부여
 	t->magic = THREAD_MAGIC;
+
+	t->original_priority = priority; // 원래 우선 순위로 되돌리기
+	t->wait_on_lock = NULL; // 락을 소유하고 있는 스레드 초기화
+	list_init(&t->donations); // 기부 받은 우선순위 리스트 초기화
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
