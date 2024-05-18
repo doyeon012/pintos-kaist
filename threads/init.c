@@ -202,6 +202,8 @@ read_command_line (void) {
 
 /* Parses options in ARGV[]
    and returns the first non-option argument. */
+// -mlfqs 옵션을 주면 advanced scheduler가 적용해서 kernel을 작동시키게 된다.
+// 기존에는 round-robin. priority scheduler
 static char **
 parse_options (char **argv) {
 	for (; *argv != NULL && **argv == '-'; argv++) {

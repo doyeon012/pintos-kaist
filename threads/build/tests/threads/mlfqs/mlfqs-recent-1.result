@@ -1,9 +1,93 @@
 FAIL
-Kernel panic in run: PANIC at ../../tests/threads/tests.c:60 in run_test(): no test named "mlfqs-recent-1"
-Call stack: 0x8004213793 0x8004216c41 0x8004206636 0x8004206783 0x8004206120
-Translation of call stack:
-0x0000008004213793: debug_panic (lib/kernel/debug.c:32)
-0x0000008004216c41: run_test (tests/threads/tests.c:61)
-0x0000008004206636: run_task (threads/init.c:252)
-0x0000008004206783: run_actions (threads/init.c:297)
-0x0000008004206120: main (threads/init.c:125)
+Some recent_cpu values were missing or differed from those expected by more than 2.5.
+  time   actual <-> expected explanation
+------ -------- --- -------- ----------------------------------------
+     2    undef     6.40     Missing value.
+     4    undef     12.60    Missing value.
+     6    undef     18.61    Missing value.
+     8    undef     24.44    Missing value.
+    10    undef     30.08    Missing value.
+    12    undef     35.54    Missing value.
+    14    89.56 >>> 40.83    Too big, by 46.23.
+    16   289.56 >>> 45.96    Too big, by 241.10.
+    18   489.56 >>> 50.92    Too big, by 436.14.
+    20   689.56 >>> 55.73    Too big, by 631.33.
+    22   889.56 >>> 60.39    Too big, by 826.67.
+    24  1089.56 >>> 64.90    Too big, by 1022.16.
+    26  1289.56 >>> 69.27    Too big, by 1217.79.
+    28    undef     73.50    Missing value.
+    30    undef     77.60    Missing value.
+    32    undef     81.56    Missing value.
+    34    undef     85.40    Missing value.
+    36    undef     89.12    Missing value.
+    38    undef     92.72    Missing value.
+    40    68.12 <<< 96.20    Too small, by 25.58.
+    42   268.12 >>> 99.57    Too big, by 166.05.
+    44   468.12 >>> 102.84   Too big, by 362.78.
+    46   668.12 >>> 106.00   Too big, by 559.62.
+    48   868.12 >>> 109.06   Too big, by 756.56.
+    50  1068.12 >>> 112.02   Too big, by 953.60.
+    52  1268.12 >>> 114.89   Too big, by 1150.73.
+    54    undef     117.66   Missing value.
+    56    undef     120.34   Missing value.
+    58    undef     122.94   Missing value.
+    60    undef     125.46   Missing value.
+    62    undef     127.89   Missing value.
+    64    undef     130.25   Missing value.
+    66    46.68 <<< 132.53   Too small, by 83.35.
+    68   246.68 >>> 134.73   Too big, by 109.45.
+    70   446.68 >>> 136.86   Too big, by 307.32.
+    72   646.68 >>> 138.93   Too big, by 505.25.
+    74   846.68 >>> 140.93   Too big, by 703.25.
+    76  1046.68 >>> 142.86   Too big, by 901.32.
+    78  1246.68 >>> 144.73   Too big, by 1099.45.
+    80    undef     146.54   Missing value.
+    82    undef     148.29   Missing value.
+    84    undef     149.99   Missing value.
+    86    undef     151.63   Missing value.
+    88    undef     153.21   Missing value.
+    90    undef     154.75   Missing value.
+    92    25.24 <<< 156.23   Too small, by 128.49.
+    94   225.24 >>> 157.67   Too big, by 65.07.
+    96   425.24 >>> 159.06   Too big, by 263.68.
+    98   625.24 >>> 160.40   Too big, by 462.34.
+   100   825.24 >>> 161.70   Too big, by 661.04.
+   102  1025.24 >>> 162.96   Too big, by 859.78.
+   104  1225.24 >>> 164.18   Too big, by 1058.56.
+   106    undef     165.35   Missing value.
+   108    undef     166.49   Missing value.
+   110    undef     167.59   Missing value.
+   112    undef     168.66   Missing value.
+   114    undef     169.69   Missing value.
+   116    undef     170.69   Missing value.
+   118     3.80 <<< 171.65   Too small, by 165.35.
+   120   203.80 >>> 172.58   Too big, by 28.72.
+   122   403.80 >>> 173.49   Too big, by 227.81.
+   124   603.80 >>> 174.36   Too big, by 426.94.
+   126   803.80 >>> 175.20   Too big, by 626.10.
+   128  1003.80 >>> 176.02   Too big, by 825.28.
+   130  1203.80 >>> 176.81   Too big, by 1024.49.
+   132    undef     177.57   Missing value.
+   134    undef     178.31   Missing value.
+   136    undef     179.02   Missing value.
+   138    undef     179.72   Missing value.
+   140    undef     180.38   Missing value.
+   142    undef     181.03   Missing value.
+   144    undef     181.65   Missing value.
+   146   182.36  =  182.26   
+   148   382.36 >>> 182.84   Too big, by 197.02.
+   150   582.36 >>> 183.41   Too big, by 396.45.
+   152   782.36 >>> 183.96   Too big, by 595.90.
+   154   982.36 >>> 184.49   Too big, by 795.37.
+   156  1182.36 >>> 185.00   Too big, by 994.86.
+   158    undef     185.49   Missing value.
+   160    undef     185.97   Missing value.
+   162    undef     186.43   Missing value.
+   164    undef     186.88   Missing value.
+   166    undef     187.31   Missing value.
+   168    undef     187.73   Missing value.
+   170    undef     188.14   Missing value.
+   172   160.92 <<< 188.53   Too small, by 25.11.
+   174   360.92 >>> 188.91   Too big, by 169.51.
+   176   560.92 >>> 189.27   Too big, by 369.15.
+   178   760.92 >>> 189.63   Too big, by 568.79.

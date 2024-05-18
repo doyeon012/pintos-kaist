@@ -153,6 +153,18 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++; // global ticks를 증가. system 부팅 후 전체적인 시간.
   thread_tick (); // 스레드의 우선순위를 관리, 다음 실행할 스레드를 선택하는 역할.
+  /*추가한 부분*/
+  if (thread_mlfqs) {
+	mlfqs_increment_recent_cpu ();//현재 스레드의 recent_cpu를 1 증가시킴.
+    if (ticks % 4 == 0) {
+      mlfqs_recalculate_priority ();//모든 스레드의 priority를 재계산.
+      if (ticks % TIMER_FREQ == 0) {
+        mlfqs_recalculate_recent_cpu ();
+        mlfqs_calculate_load_avg ();
+      }
+    }
+  }
+  /*여기까지*/
   thread_awake (ticks);	//
 }
 

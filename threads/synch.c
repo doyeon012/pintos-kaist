@@ -195,13 +195,19 @@ lock_init (struct lock *lock) {
 	*/
 void
 lock_acquire (struct lock *lock) {
+	//thread_mlfqs가 True일 경우만 실행
+	if(thread_mlfqs){
+		sema_down(&lock->semaphore);
+		lock->holder = thread_current();
+		return;
+	}
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	// sema_down (&lock->semaphore);
 	// lock->holder = thread_current ();
-	//추가한 부분
+	//priority donation을 위해 추가한 부분
 	struct thread *cur = thread_current();
 	if(lock -> holder != NULL){//이미 점유 중인 lock일 경우
 		cur->wait_on_lock = lock;//현재 스레드의 wait_on_lock으로 지정
@@ -246,10 +252,17 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	remove_with_lock(lock);//추가한 부분
+	// 현재 스레드의 donations 들에서 주어진 잠금을 가디리는 모든 스레드들 제거. 
+	// 현재 스레드에게 기부된 우선순위가 의미가 없음을 명시
+	remove_with_lock(lock);//추가한 부분. 
 	revert_priority();//추가한 부분
 
 	lock->holder = NULL;
+	if(thread_mlfqs){
+		lock->holder = NULL;
+		sema_up (&lock->semaphore);
+		return;
+	}
 	sema_up (&lock->semaphore);
 }
 

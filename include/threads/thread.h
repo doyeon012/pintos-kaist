@@ -102,6 +102,10 @@ struct thread {
 	struct list donations; //추가한 부분. 자신에게 priority를 나눠준 thread list
 	struct list_elem donation_elem; //추가한 부분. 우선순위 기부 리스트의 element
 
+	int nice;//추가한 부분. MLFQS
+	int recent_cpu;//추가한 부분. MLFQS
+	struct list_elem allelem; //추가한 부분. 모든 스레드들의 리스트
+
 
 #ifdef USERPROG 
 	/* Owned by userprog/process.c. */
@@ -120,7 +124,7 @@ struct thread {
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
-extern bool thread_mlfqs;
+extern bool thread_mlfqs; // -mlfqs 옵션을 주면 해당 값이 true가 된다.
 
 void thread_init (void);
 void thread_start (void);
@@ -161,4 +165,12 @@ bool cmp_donate_priority(const struct list_elem *a, const struct list_elem *b, v
 void donate_priority(void);
 void remove_with_lock(struct lock *lock);//추가한 부분
 void revert_priority(void);//추가한 부분 
+
+//mlfqs 추가해준 부분
+void mlfqs_calculate_priority(struct thread *t);
+void mlfqs_calculate_recent_cpu(struct thread *t);
+void mlfqs_calculate_load_avg (void);
+void mlfqs_increment_recent_cpu (void);
+void mlfqs_recalculate_recent_cpu (void);
+void mlfqs_recalculate_priority (void);
 #endif /* threads/thread.h */
