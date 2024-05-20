@@ -133,8 +133,28 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++; 
   thread_tick (); // 스레드의 우선순위를 관리, 다음 실행할 스레드를 선택하는 역할.
   
-  thread_wakeup(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
+  // mlfqs 수정 해야 할 것
+  /* mlfqs 스케줄러일 경우
+  	 timer_interrupt가 발생할때 마다 recuent_cpu 1증가,
+	 1초마다 load_avg, recent_cpu, pririty 계산,
+	 매 4tick마다 priority 계산*/
+	if(thread_mlfqs)
+	{
+		mlfqs_increment();
+		if (timer_ticks() % 4 == 0)
+		{
+			mlfqs_recale_priority();
+		}
+		if (timer_ticks() % 100 == 0)
+		{
+			mlfqs_load_avg();
+			mlfqs_recalc_recent_cpu();
+		}
+	}
+	
+	thread_wakeup(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
 }
+  
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

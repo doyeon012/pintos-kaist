@@ -43,7 +43,6 @@
    thread, if any). */
 
 bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void remove_donor(struct lock *lock);
 
 // 세마포어를 주어진 값으로 초기화
 void
@@ -62,7 +61,6 @@ sema_init (struct semaphore *sema, unsigned value) {
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. This is
    sema_down function. */
-
 
 // 세마포어 Request 세마포어를 흭득한 값을 1만큼 decrease
 // 값이 0이하이면 현재 스레드를 wait 리스트에 추가하고 블록
@@ -243,44 +241,50 @@ lock_acquire (struct lock *lock) {
 	// 현재 스레드 가져오기
 	struct thread *current_thread = thread_current();
 	
-
 	// 락 소유자가 있는 경우 우선순위 기부 처리 - nested donataion 처리.
 	if(lock->holder != 	NULL) // NULL이 아니다? 그러면 다른 스레드가 소유하고 있다는 뜻이다.
 	{
 		if(lock->holder->priority < current_thread->priority)
-		{	
+		{	 
 			current_thread->wait_on_lock = lock; // 현재 스레드는 'wait_on_lock' 필드에 이 락을 저장
 			
 			// 락 소유자의 'donations' 리스트에 현재 스레드를 우선순위에 따라 삽입
 			list_insert_ordered(&lock->holder->donations, &current_thread->d_elem, donation_cmp_priority, NULL);
 
-			// 우선순위 기부 처리(nested donataion)
-			while (current_thread->wait_on_lock != NULL) {
-			
-			// 락 소유자 가져오기
-			struct thread *holder = current_thread->wait_on_lock->holder;
+			// mlfqs 활성화 시 donataion 함수 비활성화
+			if(!thread_mlfqs)
+			{
 
-			// 우선순위 비교 및 업데이트
-			if (holder->priority < current_thread->priority)
+			// 우선순위 기부 처리(nested donataion)
+			while (current_thread->wait_on_lock != NULL)
 			{
-			// 락 소유자의 우선순위를 > 현재 스레드의 우선순위에 기부
-			holder->priority = current_thread->priority;
-			//현재스레드 = 락 소유자로 변경
-			current_thread = holder;
-			} 
-			else
 			{
-				break; 
+
+				// 락 소유자 가져오기
+				struct thread *holder = current_thread->wait_on_lock->holder;
+
+				// 우선순위 비교 및 업데이트
+				if (holder->priority < current_thread->priority)
+				{
+					// 락 소유자의 우선순위를 > 현재 스레드의 우선순위에 기부
+					holder->priority = current_thread->priority;
+					//현재스레드 = 락 소유자로 변경
+					current_thread = holder;
+				} 
+				else
+				{
+					break; 
+				}
 			}
-	}
+			}
+			
 		}
 	}
-
+	}		
 	// 락 흭득 시도(이 과정에서 세마포어 값이 0이면 현재 스레드는 블록)
 	sema_down (&lock->semaphore);
-
 	// 락 소유자 설정(락의 소유자를 현재 스레드로 설정)
-	lock->holder = thread_current (); 
+	lock->holder = thread_current ();
 
 	// 대기 상태 해제(락을 소유 했으므로)
 	current_thread->wait_on_lock = NULL;
@@ -304,6 +308,8 @@ lock_try_acquire (struct lock *lock) {
 	if (success)
 		lock->holder = thread_current ();
 	return success;
+
+	
 }
 
 /* Releases LOCK, which must be owned by the current thread.
@@ -317,45 +323,49 @@ lock_try_acquire (struct lock *lock) {
 // 잠금이 해제되면 기부 목록에서 잠금이 설정된 스레드를 삭제하고 우선 순위를 올바르게 설정
 void
 lock_release (struct lock *lock) {
+	// mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
 	// remove_donor(lock);
+	lock->holder = NULL;
 
-	struct list_elem *e;
-	struct thread *current_thread_donation = &thread_current()->donations;
+	if(!thread_mlfqs)
+	{
+		struct list_elem *e;
+		struct thread *current_thread_donation = &thread_current()->donations;
 
-	// 현재 스레드가 소유한 'donations'리스트를 순회하며, 'wait_on_lockl'이 해제하려는 'lock'인 스레드를 찾기 = 기부 목록에서 기부된 스레드 제거
-	for(e = list_begin(current_thread_donation); e != list_end(current_thread_donation); e = list_next(e))
-	{	
-		// 기부 목록에서 스레드 추출
-		struct thread *t = list_entry(e, struct thread, d_elem);
+		// 현재 스레드가 소유한 'donations'리스트를 순회하며, 'wait_on_lockl'이 해제하려는 'lock'인 스레드를 찾기 = 기부 목록에서 기부된 스레드 제거
+		for(e = list_begin(current_thread_donation); e != list_end(current_thread_donation); e = list_next(e))
+		{	
+			// 기부 목록에서 스레드 추출
+			struct thread *t = list_entry(e, struct thread, d_elem);
 
-		// 특정 락을 기다리는지 확인
-		if (t->wait_on_lock == lock)
-		{
-			list_remove(&t->d_elem);
+			// 특정 락을 기다리는지 확인
+			if (t->wait_on_lock == lock)
+			{
+				list_remove(&t->d_elem);
+			}
 		}
-	}
-
-	//우선 순위 복원(왜? 단순히 원래 우선순위로 간다면, 남아있는 다른 락이 뺐긴다)
-	thread_current()->priority = thread_current()->original_priority;
-
-	// 기부받은 우선순위 확인 및 조정(multiple donation 처리)
-	if(!list_empty(current_thread_donation)) //현재 스레드가 기부받은 우선순위가 있는지 확인
-	{	
-		// 최대 기부 우선순위 찾기.
-		struct thread *max_donor = list_entry(list_front(current_thread_donation), struct thread, d_elem);
-		
-		// 우선순위 조정
-		if(max_donor->priority > thread_current()->priority) // 기부받은 스레드의 우선순위가 현재 스레드의 우선순위보다 높은경우
-		{
-			thread_current()->priority = max_donor->priority; // 현재 스레드의 우선순위를 기부받은 우선 순위로 설정
-		}
-	}
 
 	
-	lock->holder = NULL;
+		//우선 순위 복원(왜? 단순히 원래 우선순위로 간다면, 남아있는 다른 락이 뺐긴다)
+		thread_current()->priority = thread_current()->original_priority;
+
+		// 기부받은 우선순위 확인 및 조정(multiple donation 처리)
+		if(!list_empty(current_thread_donation)) //현재 스레드가 기부받은 우선순위가 있는지 확인
+		{	
+			// 최대 기부 우선순위 찾기.
+		struct thread *max_donor = list_entry(list_front(current_thread_donation), struct thread, d_elem);
+				
+			// 우선순위 조정
+			if(max_donor->priority > thread_current()->priority) // 기부받은 스레드의 우선순위가 현재 스레드의 우선순위보다 높은경우
+			{
+				thread_current()->priority = max_donor->priority; // 현재 스레드의 우선순위를 기부받은 우선 순위로 설정
+			}
+		}
+	}
+	
 	sema_up (&lock->semaphore);
 }
 
@@ -487,7 +497,6 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 		cond_signal (cond, lock);
 }
 
-
 // 두 세마포어 목록 요소의 우선순위를 비교하여 정렬을 한다.
 // 각 세마포어의 대기 목록에서 가장 높은 우선순위를 가진 스레드를 추출한 후, 그 우선순위를 비교하여 높은 순서대로 정렬할 수 있도록
 bool
@@ -504,8 +513,7 @@ cmp_sema_priority(const struct list_elem *a, const struct list_elem *b,  void *a
 	// 가장 높은 우선순위 스레드 추출
 	struct thread *s_a = list_entry(list_begin(waiters_a), struct thread, elem);// 스레드 목록의 첫 번째 요소 
 	struct thread *s_b = list_entry(list_begin(waiters_b), struct thread, elem);// 각 요소를 'thread' 구조체 포인터로 반환
-
-
+	
 	// 우선순위 비교
 	return s_a->priority > s_b->priority;
 }

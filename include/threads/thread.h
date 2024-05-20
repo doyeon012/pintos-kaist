@@ -101,6 +101,12 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              // 스레드가 여러 리스트(ready_list, wait_list)에 들어갈 때 사용할 수 있는 리스트 요소
 	int64_t wakeup_ticks;       // 일어날 시각
+
+	// MLFQS 구현
+	int nice;
+	int recent_cpu;
+	struct list_elem all_elem;
+	
 #ifdef USERPROG 
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -142,10 +148,21 @@ void thread_yield (void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+// MLFQS 뼈대만 있는 함수
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+// MLFQS 추가로 구현할 함수
+void mlfqs_priority (struct thread *t);
+void mlfqs_recent_cpu (struct thread *t);
+void mlfqs_load_avg (void);
+void mlfqs_increment (void);
+void mlfqs_recalc (void);
+void mlfqs_recale_priority(void);
+void mlfqs_recalc_recent_cpu(void);
+
 
 void do_iret (struct intr_frame *tf);
 
