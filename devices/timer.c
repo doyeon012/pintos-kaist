@@ -142,19 +142,19 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	thread_tick();
 
 	// mlfq
+	// wake_up은 mlfq이후에 실행
 	if (thread_mlfqs)
 	{
 		struct thread *t = thread_current();
-		up_recent_cpu(t);
-		if (timer_ticks() % TIMER_FREQ == 0)
+		up_recent_cpu(t);					 // recent_cput +1
+		if (timer_ticks() % TIMER_FREQ == 0) // 1초(100tick)마다 load_avg 갱신한 이후 모든 thread의 recent_cpu, priority 재계산
 		{
 			recalculate_all();
 		}
-		else if (timer_ticks() % 4 == 0)
+		else if (timer_ticks() % 4 == 0) // 4tick 마다 priority 재계산
 		{
 			recalculate_priority();
 		}
-
 	}
 	//
 	/* add code - gdy*/

@@ -365,7 +365,7 @@ void thread_yield(void)
 // 현재 thread의 우선순위를 new_priority로 설정
 void thread_set_priority(int new_priority)
 {
-	if (thread_mlfqs)
+	if (thread_mlfqs) // thread_set_priority 함수는 mlfqs가 ture일 경우일땐 반영되지 않아야한다.
 	{
 		return;
 	}
@@ -428,10 +428,10 @@ void thread_set_nice(int nice UNUSED)
 int thread_get_nice(void)
 {
 	enum intr_level old_level;
-	old_level = intr_disable();
+	old_level = intr_disable(); // interrupt 활성화
 	int temp = thread_current()->nice;
-	intr_set_level(old_level);
-	return temp;
+	intr_set_level(old_level); // interrupt 비 활성화
+	return temp;	// 현재 thread의 nice 값 반환 
 }
 
 /* Returns 100 times the system load average. */
@@ -442,7 +442,7 @@ int thread_get_load_avg(void)
 	enum intr_level old_level;
 	old_level = intr_disable();
 
-	int temp = TO_INTEGER_ROUND(load_average * 100);
+	int temp = TO_INTEGER_ROUND(load_average * 100);		// 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
 
 	intr_set_level(old_level);
 
@@ -455,7 +455,7 @@ int thread_get_recent_cpu(void)
 	enum intr_level old_level;
 	old_level = intr_disable();
 
-	int temp = TO_INTEGER_ROUND(thread_current()->recent_cpu * 100);
+	int temp = TO_INTEGER_ROUND(thread_current()->recent_cpu * 100);	// 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
 
 	intr_set_level(old_level);
 	return temp;
@@ -530,9 +530,11 @@ init_thread(struct thread *t, const char *name, int priority)
 	list_init(&t->donations);
 	t->org_priority = priority;
 	t->magic = THREAD_MAGIC;
+	// nice값과 recent_cpu값을 초기화 한다.
 	t->nice = 0;							 // add code
 	t->recent_cpu = 0;						 // add code
 	list_push_back(&all_list, &t->all_elem); // add code
+											 // 모든 thread가 초기화 될 때 all_list에 넣어준다.
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -667,7 +669,7 @@ do_schedule(int status)
 	{
 		struct thread *victim =
 			list_entry(list_pop_front(&destruction_req), struct thread, elem);
-		list_remove(&victim->all_elem);
+		list_remove(&victim->all_elem);		// 삭제되는 thread = victim이므로 해당 쓰레드의 all_elem값을 삭제 
 		palloc_free_page(victim);
 	}
 	thread_current()->status = status;
@@ -824,7 +826,7 @@ bool cmp_priority_donation(const struct list_elem *a_, const struct list_elem *b
 /*nice와 cpu_recent를 사용하여 우선순위를 계산한다.*/
 void calculate_priority(struct thread *t)
 {
-	if (t != idle_thread)
+	if (t != idle_thread) // 현재 thread가 ide_thread가 아닐 경우
 	{
 		t->priority = PRI_MAX - TO_INTEGER_ROUND((t->recent_cpu / 4)) - (t->nice * 2);
 	}
@@ -847,13 +849,13 @@ void calculate_recent_cpu(struct thread *t)
 int calculate_load_average()
 {
 	int ready_threads;
-	if (thread_current() == idle_thread)
+	if (thread_current() == idle_thread) // 현재 실행준인 thread가 idle_thread일 경우
 	{
-		ready_threads = list_size(&ready_list);
+		ready_threads = list_size(&ready_list); // ready_threads는 ready_list에 들어있는 모든 thread의 개수
 	}
 	else
 	{
-		ready_threads = list_size(&ready_list) + 1;
+		ready_threads = list_size(&ready_list) + 1; // ready_threads는 ready_list에 들어있는 모든 thread의 개수 + 실행중인 thread
 	}
 	// load_average = (59 / 60) * load_average + (1 / 60) * ready_threads;
 	load_average = ADD(MULTIPLY(DIVIDE(TO_FIXED_POINT(59), TO_FIXED_POINT(60)), load_average), MULTIPLY_INT(DIVIDE(TO_FIXED_POINT(1), TO_FIXED_POINT(60)), ready_threads));
@@ -872,23 +874,24 @@ void up_recent_cpu(struct thread *t)
 /*모든 thread의 우선순위와 recent_cpu 다시 계산한다. */
 void recalculate_all()
 {
+	// all_list라는 새로운 리스트를 만듬, all_list에는 존재하는 모든 thread가 들어가 있다.
 	struct list_elem *all_list_first = list_begin(&all_list);
-	calculate_load_average();
+	calculate_load_average(); // load_average를 갱신해 준 이후 pirority와 recent_cpu값을 갱신해준다.
 	while (all_list_first != list_end(&all_list))
 	{
 		struct thread *first_thread = list_entry(all_list_first, struct thread, all_elem);
-		calculate_priority(first_thread);
-		calculate_recent_cpu(first_thread);
+		calculate_priority(first_thread);	// 수식에 의한 priority값 갱신
+		calculate_recent_cpu(first_thread); // recent_cpu 값 갱신
 		all_list_first = all_list_first->next;
 	}
 }
-
+// 모든 thread의 우선순위를 계산한다.
 void recalculate_priority()
 {
 	struct list_elem *all_list_first = list_begin(&all_list);
 	while (all_list_first != list_end(&all_list))
 	{
-		struct thread *first_thread = list_entry(all_list_first, struct thread, all_elem);
+		struct thread *first_thread = list_entry(all_list_first, struct thread, all_elem); // all_list의 elem 이므로 all_elem을 사용해야한다.
 		calculate_priority(first_thread);
 		all_list_first = all_list_first->next;
 	}
