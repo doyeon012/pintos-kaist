@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "lib/string.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -26,6 +27,8 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+void argument_stack(char **parse, int count, void **esp);
+
 
 /* General process initializer for initd and other process. */
 static void
@@ -38,26 +41,47 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
-tid_t
+/*
+주어진 'file_name' 문자열을 사용하여 새로운 스레드 생성.
+
+<구현해야 할 것>
+현재는 커멘드 라인 전체가 thread_create()에 전달되고 있음
+1. file_name 문자열 파싱
+2. 커맨드 라인의 첫번째 토큰을 thread_create() 함수에 첫 인자로 전달 되도록
+*/
+tid_t	
 process_create_initd (const char *file_name) {
+	/* 구현해야 할 것
+	현재는 커멘드 라인 전체가 thread_create()에 전달되고 있음
+	1. file_name 문자열 파싱
+	2. 커맨드 라인의 첫번째 토큰을 thread_create() 함수에 첫 인자로 전달 되도록
+	*/
 	char *fn_copy;
 	tid_t tid;
-
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
+	
+	fn_copy = palloc_get_page (0); // 페이지 크기의 메모리 블록을 할당. 0(기본)
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, file_name, PGSIZE); // 문자열을 안전하게 복사.
 
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+	
+	// 문자열을 공백을 기준으로 파싱하여 첫번째 토큰 추출
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
+	// 새 스레드 생성(첫 번째 토큰 보내기)
+	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
+
+	// 오류 처리
+	if(tid == TID_ERROR)
+		palloc_free_page(fn_copy);
+
 	return tid;
+
 }
 
 /* A thread function that launches first user process. */
+// 운영 체제에서 첫 번째 사용자 프로세스를 시작하는 스레드 함수.
+// 첫 번째 사용자 프로그램을 로드하고 실행하는 역할을 한다.
 static void
 initd (void *f_name) {
 #ifdef VM
@@ -158,8 +182,84 @@ error:
 	thread_exit ();
 }
 
+/*
+proces_exec() 함수에서 parsing한 프로그램 이름 and 인자를 스택에 저장.
+
+<구현해야 할 것>
+1. 프로그램 이름 및 인자(문자열) push
+2. 프로그램 이름 및 인자 주소들 push
+3. argv (문자열을 가리키는 주소들의 배열을 가리킴) push 
+4. argc (문자열의 개수 저장) push
+5. fake address(0) 저장
+*/
+void
+argument_stack(char **parse, int count, void **rsp) // 주소를 전달 받았으니 이중 포인터
+{
+	char *stack_ptr = (char *)*rsp; // 현재 스택 포인터를 가리키는 포인터
+    uintptr_t addr[count]; // 각 문자열의 주소 저장.
+
+    /*
+	1. 프로그램 이름 및 인자(문자열) push
+    스택은 아래 방향으로 성장하므로 스택에 인자 추가시 string을 오른쪽 > 왼쪽(역방향) push
+	'memcpy'를 사용하여 문자열을 스택에 복사.
+	*/
+	for (int i = count - 1; i >= 0; i--) {
+        int len = strlen(parse[i]) + 1; // NULL 포함
+        stack_ptr -= len;
+        memcpy(stack_ptr, parse[i], len);
+        addr[i] = (uintptr_t)stack_ptr;
+    }
+
+    /*
+	2. 정렬 패딩 push
+	각 문자열 push 후 (8)byte 단위로 정렬하기 위해 필요한 만큼 padding 추가.
+	*/
+    while ((uintptr_t)stack_ptr % 8 != 0) {
+        stack_ptr--;
+        *stack_ptr = 0;
+    }
+
+    /*
+	3. 프로그램 이름 및 인자 주소들 push
+    각 문자열의 주소를 스택에 역순으로 저장. 마지막에 NULL 포인터 추가하여 문자열 배열의 끝 표시
+	*/
+	for (int i = count; i >= 0; i--) {
+        stack_ptr -= sizeof(uintptr_t);
+        *(uintptr_t *)stack_ptr = (i == count) ? 0 : addr[i]; // 마지막은 NULL 포인터
+    }
+
+    /*
+	4. argv (문자열을 가리키는 주소들의 배열을 가리킴) push
+	이 주소는 프로그램이 실행될 때 인자를 참조하는데 사용
+	*/ 
+    uintptr_t argv = (uintptr_t)stack_ptr;
+    stack_ptr -= sizeof(uintptr_t);
+    *(uintptr_t *)stack_ptr = argv;
+
+    // 5. argc (문자열의 개수 저장) push
+    stack_ptr -= sizeof(int);
+    *(int *)stack_ptr = count;
+
+    /*
+	6. fake address(0) 저장
+	다음 인스트럭션 주소를 push 해야 하는데, 지금은 프로세스를 생성하는 거라서 반환 주소x
+	*/
+    stack_ptr -= sizeof(void *);
+    *(void **)stack_ptr = 0;
+
+	// 최종 스택 포인터 설정.
+    *rsp = (void *)stack_ptr;
+}
+
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/*
+지정된 실행 파일을 현재 프로세스에 로드하고 실행하는 역할.
+
+<구현해야 할 것>
+1. file_name 문자열 파싱
+2. argument_stack() 함수를 이용해 스택에 토큰들을 저장.
+*/ 
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
@@ -174,19 +274,51 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
+	// 현재 컨텍스트 종료
 	process_cleanup ();
 
-	/* And then load the binary */
-	success = load (file_name, &_if);
 
+	// 변수 초기화
+	int count = 0;
+	char *parse[128];
+	char *token;
+	char *save_ptr;
+
+	// 인자 파싱
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
+	token = strtok_r(NULL, " ", &save_ptr))
+	{
+		parse[count] = token;
+		count++;
+	}
+
+	/* And then load the binary */
+	/* if_.esp는 스택 포인터
+	바이너리 로드 -  'file_name'에 지정된 프로그램을 메모리에 적재한다.
+	load - '_if'에 초기 스택 포인터와 엔트리 포인트(프로그램의 시작주소) 설정 */
+	success = load (file_name, &_if); // load() : file_name의 프로그램을 메모리에 적재
+	
+	// 로드 실패 처리
+	if (!success)
+	{
+		palloc_free_page(file_name);
+		return -1;
+	}
+
+
+	// 유저 프로그램이 실행 되기 전에 argument_stack() 함수 호출하여 스택에 인자 저장.
+	argument_stack(parse, count , &_if.rsp);
+	
+	// 디버깅 툴 - 메모리 내용을 16진수로 화면에 출력. 유저 스택에 인자를 저장 후 유저 스택 메모리 확인
+	hex_dump(_if.rsp , _if.rsp , USER_STACK-(uint64_t)_if.rsp , true);
+	/* Start switched process. */
+	
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
-		return -1;
 
-	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+
+	do_iret (&_if); // 인터럽트 반환 명령을 사용하여 새로운 사용자 모드 프로그램 실행
+	NOT_REACHED (); 
 }
 
 
@@ -204,6 +336,13 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	// argument passing 테스트를 하려면 일단 wait을 구현하기 위해서 임시로 반복문 추가.
+	while (child_tid)
+	{
+		
+	}
+	
+	
 	return -1;
 }
 
@@ -320,6 +459,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+
+// ELF 실행 파일을 현재 프로세스로 로드
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -328,7 +469,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
-
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -428,6 +568,7 @@ done:
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
+// 'phdr'가 설명하는 세그먼트가 유효하고 로드 가능한지 확인
 static bool
 validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* p_offset and p_vaddr must have the same page offset. */
