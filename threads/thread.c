@@ -8,7 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
-#include "threads/synch.h"
+#include "threads/synch.h"  
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "threads/fixed_point.h"
@@ -450,6 +450,8 @@ int thread_get_load_avg(void)
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
+
+/* recent_cpu에 100을 곱한 값을 리턴 */
 int thread_get_recent_cpu(void)
 {
 	enum intr_level old_level;

@@ -99,7 +99,10 @@ memchr (const void *block_, int ch_, size_t size) {
 /* Finds and returns the first occurrence of C in STRING, or a
    null pointer if C does not appear in STRING.  If C == '\0'
    then returns a pointer to the null terminator at the end of
-   STRING. */
+   STRING. */   
+
+/* 주어진 문자열 string에서 c의 첫 번째 등장위치를 찾아 반환, c가 string에 없을 경우 null 포인터 반환 */
+/* c가 "\0" 일 경우 주어진 문자열 string의 끝에 있는 "\0"을 가리키는 포인터를 반환한다. */
 char *
 strchr (const char *string, int c_) {
 	char c = c_;
@@ -215,6 +218,7 @@ outputs:
 'to'
 'tokenize.'
 */
+/* delimiters로 구분된 토큰으로 문자열을 분리, s = 토큰화 할 문자열 */
 char *
 strtok_r (char *s, const char *delimiters, char **save_ptr) {
 	char *token;
@@ -298,6 +302,7 @@ strnlen (const char *string, size_t maxlen) {
    increasingly popular extension.  See
 http://www.courtesan.com/todd/papers/strlcpy.html for
 information on strlcpy(). */
+/* 문자열 복사 */
 size_t
 strlcpy (char *dst, const char *src, size_t size) {
 	size_t src_len;
