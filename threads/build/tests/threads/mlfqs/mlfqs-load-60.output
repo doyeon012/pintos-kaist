@@ -4,7 +4,7 @@ Kernel command line: -q -mlfqs run mlfqs-load-60
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  26,188,800 loops/s.
+Calibrating timer...  26,265,600 loops/s.
 Boot complete.
 Executing 'mlfqs-load-60':
 (mlfqs-load-60) begin
@@ -71,39 +71,19 @@ Executing 'mlfqs-load-60':
 (mlfqs-load-60) After 116 seconds, load average=14.80.
 (mlfqs-load-60) After 118 seconds, load average=14.30.
 (mlfqs-load-60) After 120 seconds, load average=13.83.
-(mlfqs-load-60) After 122 seconds, load average=13.37.
-(mlfqs-load-60) After 124 seconds, load average=12.93.
-(mlfqs-load-60) After 126 seconds, load average=12.50.
-(mlfqs-load-60) After 128 seconds, load average=12.08.
-(mlfqs-load-60) After 130 seconds, load average=11.68.
-(mlfqs-load-60) After 132 seconds, load average=11.30.
-(mlfqs-load-60) After 134 seconds, load average=10.92.
-(mlfqs-load-60) After 136 seconds, load average=10.56.
-(mlfqs-load-60) After 138 seconds, load average=10.21.
-(mlfqs-load-60) After 140 seconds, load average=9.87.
-(mlfqs-load-60) After 142 seconds, load average=9.54.
-(mlfqs-load-60) After 144 seconds, load average=9.23.
-(mlfqs-load-60) After 146 seconds, load average=8.92.
-(mlfqs-load-60) After 148 seconds, load average=8.62.
-(mlfqs-load-60) After 150 seconds, load average=8.34.
-(mlfqs-load-60) After 152 seconds, load average=8.06.
-(mlfqs-load-60) After 154 seconds, load average=7.79.
-(mlfqs-load-60) After 156 seconds, load average=7.54.
-(mlfqs-load-60) After 158 seconds, load average=7.29.
-(mlfqs-load-60) After 160 seconds, load average=7.04.
-(mlfqs-load-60) After 162 seconds, load average=6.81.
-(mlfqs-load-60) After 164 seconds, load average=6.58.
-(mlfqs-load-60) After 166 seconds, load average=6.37.
-(mlfqs-load-60) After 168 seconds, load average=6.15.
-(mlfqs-load-60) After 170 seconds, load average=5.95.
-(mlfqs-load-60) After 172 seconds, load average=5.75.
-(mlfqs-load-60) After 174 seconds, load average=5.56.
-(mlfqs-load-60) After 176 seconds, load average=5.38.
-(mlfqs-load-60) After 178 seconds, load average=5.20.
-(mlfqs-load-60) end
-Execution of 'mlfqs-load-60' complete.
-Timer: 18828 ticks
-Thread: 12668 idle ticks, 6161 kernel ticks, 0 user ticks
-Console: 5405 characters output
-Keyboard: 0 keys pressed
-Powering off...
+Interrupt 0x0d (#GP General Protection Exception) at rip=8004207fbc
+ cr2=0000000000000000 error=               0
+rax cccccccccccccc4c rbx 0000000000000000 rcx 0000000000000000 rdx 00000000fffe99db
+rsp 0000008004233e60 rbp 0000008004233e70 rsi 00000000666666a7 rdi cccccccccccccc4c
+rip 0000008004207fbc r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
+r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
+r15 0000000000000000 rflags 00000082
+es: 0010 ds: 0010 cs: 0008 ss: 0010
+Kernel PANIC at ../../threads/interrupt.c:361 in intr_handler(): Unexpected interrupt
+Call stack: 0x8004213f7c 0x80042092bc 0x800420966e 0x8004208343 0x800420dcc0 0x8004209250 0x800420966e 0x80042076cb.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 13040 ticks
+Thread: 6947 idle ticks, 6093 kernel ticks, 0 user ticks
+Console: 4

@@ -20,12 +20,15 @@
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "userprog/syscall.h"
 #endif
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+
+
 
 /* General process initializer for initd and other process. */
 static void
@@ -38,6 +41,10 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+/**
+ * file_name: parsing해야 하는 command line.
+ * 여기서 parsing해서 얻은 파일 이름이 thread_create 함수의 첫번쨰 인자로 들어가야 함.
+*/
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
@@ -45,15 +52,21 @@ process_create_initd (const char *file_name) {
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
+	//kernel공간에서 사용할 4KB 크기의 단일 페이지를 할당
+	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy(fn_copy, file_name, PGSIZE);//fn_copy에 file_name을 복사. PGSIZE: 4KB
+
+	char *save_ptr;//strtok_r을 사용하기 위한 변수
+	// printf("file_name: %s\n", file_name);//args-single onrarg
+	strtok_r(file_name, " ", &save_ptr);
+	// printf("file_name: %s\n", file_name);//args-single
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+		palloc_free_page(fn_copy);
 	return tid;
 }
 
@@ -159,9 +172,12 @@ error:
 }
 
 /* Switch the current execution context to the f_name.
- * Returns -1 on fail. */
-int
-process_exec (void *f_name) {
+ * Returns -1 on fail. 
+ * 인자로 들어오는 f_name을 parsing. user stack에 매개변수를 push.
+ */
+
+int process_exec(void *f_name)
+{ 
 	char *file_name = f_name;
 	bool success;
 
@@ -174,19 +190,41 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
-	process_cleanup ();
+	process_cleanup();
+
+	char *parse[64];
+	char *token, *save_ptr;
+	int count = 0;
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+		parse[count++] = token;
 
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	// lock_acquire(&filesys_lock);
+	success = load(file_name, &_if);
+	// lock_release(&filesys_lock);
+	// 이진 파일을 디스크에서 메모리로 로드한다.
+	// 이진 파일에서 실행하려는 명령의 위치를 얻고 (if_.rip)
+	// user stack의 top 포인터를 얻는다. (if_.rsp)
+	// 위 과정을 성공하면 실행을 계속하고, 실패하면 스레드가 종료된다.
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
+	{
+		palloc_free_page(file_name);
 		return -1;
+	}
+
+	argument_stack(parse, count, &_if.rsp); // 함수 내부에서 parse와 rsp의 값을 직접 변경하기 위해 주소 전달
+	// _if.R.rdi = count;
+	// _if.R.rsi = (char *)_if.rsp + 8;
+
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+
+	palloc_free_page(file_name);
 
 	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+	do_iret(&_if);
+	NOT_REACHED();
 }
 
 
@@ -204,6 +242,22 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	//자식 프로세스를 찾음. 해당 자식 프로세스가 없을 경우 NULL을 반환
+	// struct thread *child = get_child_process(child_tid); 
+	// if (child == NULL) // 자식이 아니면 -1을 반환한다.
+	// 	return -1;
+
+	// // 자식이 종료될 때까지 대기한다. (process_exit에서 자식이 종료될 때 sema_up 해줄 것이다.)
+	// sema_down(&child->wait_sema);
+	// // 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 현재 스레드(부모)의 자식 리스트에서 제거한다.
+	// list_remove(&child->child_elem);
+	// // 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
+	// sema_up(&child->exit_sema);
+
+	// return child->exit_status; // 자식의 exit_status를 반환한다.
+	for(int i = 0; i<10000000;i++){
+		printf("wait\n");
+	}
 	return -1;
 }
 
@@ -255,6 +309,51 @@ process_activate (struct thread *next) {
 
 	/* Set thread's kernel stack for use in processing interrupts. */
 	tss_update (next);
+}
+
+//추가한 부분. parse: parsing된 문자열, count: parsing된 문자열의 개수, rsp: user stack의 top 포인터
+void argument_stack(char **parse, int count, void **rsp) // 주소를 전달받았으므로 이중 포인터 사용
+{
+	//parse[i][j]
+	//parse[0]: args-single
+	//parse[1]: onearg
+	// for (int i = 0; i < count; i++)
+	// {
+	// 	printf("parse[%d]: %s\n", i, parse[i]);
+	// }
+	// 프로그램 이름, 인자 문자열 push
+	for (int i = count - 1; i >= 0; i--)
+	{
+		for (int j = strlen(parse[i]); j >= 0; j--)
+		{
+			(*rsp)--;					  // 스택 주소 감소
+			**(char **)rsp = parse[i][j]; // 주소에 문자 저장
+		}
+		parse[i] = *(char **)rsp; // parse[i]에 현재 rsp의 값 저장해둠(지금 저장한 인자가 시작하는 주소값)
+	}
+
+	// 정렬 패딩 push
+	int padding = (int)*rsp % 8;
+	for (int i = 0; i < padding; i++)
+	{
+		(*rsp)--;
+		**(uint8_t **)rsp = 0; // rsp 직전까지 값 채움
+	}
+
+	// 인자 문자열 종료를 나타내는 0 push
+	(*rsp) -= 8;
+	**(char ***)rsp = 0;
+
+	// 각 인자 문자열의 주소 push
+	for (int i = count - 1; i >= 0; i--)
+	{
+		(*rsp) -= 8; // 다음 주소로 이동
+		**(char ***)rsp = parse[i];
+	}
+
+	// return address push
+	(*rsp) -= 8;
+	**(void ***)rsp = 0;
 }
 
 /* We load ELF binaries.  The following definitions are taken
@@ -637,3 +736,58 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+// 파일 객체에 대한 파일 디스크립터를 생성하는 함수
+// int process_add_file(struct file *f)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fdt;
+
+// 	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
+// 	while (curr->next_fd < FDT_COUNT_LIMIT && fdt[curr->next_fd])
+// 		curr->next_fd++;
+// 	if (curr->next_fd >= FDT_COUNT_LIMIT)
+// 		return -1;
+// 	fdt[curr->next_fd] = f;
+
+// 	return curr->next_fd;
+// }
+
+// // 파일 객체를 검색하는 함수
+// struct file *process_get_file(int fd)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fdt;
+// 	/* 파일 디스크립터에 해당하는 파일 객체를 리턴 */
+// 	/* 없을 시 NULL 리턴 */
+// 	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+// 		return NULL;
+// 	return fdt[fd];
+// }
+
+// // 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+// void process_close_file(int fd)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fdt;
+// 	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+// 		return NULL;
+// 	fdt[fd] = NULL;
+// }
+
+// 자식 리스트에서 원하는 프로세스를 검색하는 함수
+struct thread *get_child_process(int pid)
+{
+	/* 자식 리스트에 접근하여 프로세스 디스크립터 검색 */
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		/* 해당 pid가 존재하면 프로세스 디스크립터 반환 */
+		if (t->tid == pid)
+			return t;
+	}
+	/* 리스트에 존재하지 않으면 NULL 리턴 */
+	return NULL;
+}

@@ -251,6 +251,11 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+	if(thread_mlfqs){
+		lock->holder = NULL;
+		sema_up (&lock->semaphore);
+		return;
+	}
 
 	// 현재 스레드의 donations 들에서 주어진 잠금을 가디리는 모든 스레드들 제거. 
 	// 현재 스레드에게 기부된 우선순위가 의미가 없음을 명시
@@ -258,11 +263,7 @@ lock_release (struct lock *lock) {
 	revert_priority();//추가한 부분
 
 	lock->holder = NULL;
-	if(thread_mlfqs){
-		lock->holder = NULL;
-		sema_up (&lock->semaphore);
-		return;
-	}
+	
 	sema_up (&lock->semaphore);
 }
 

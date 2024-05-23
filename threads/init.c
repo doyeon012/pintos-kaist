@@ -74,8 +74,8 @@ main (void) {
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
-	argv = read_command_line ();
-	argv = parse_options (argv);
+	argv = read_command_line ();//command line을 읽어와서 argv에 저장
+	argv = parse_options (argv);//해당 line의 option들을 parsing. argv에 담음.
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
@@ -119,7 +119,7 @@ main (void) {
 	printf ("Boot complete.\n");
 
 	/* Run actions specified on kernel command line. */
-	run_actions (argv);
+	run_actions (argv);//argv를 여기서 실행
 
 	/* Finish up. */
 	if (power_off_when_done)
@@ -236,16 +236,19 @@ parse_options (char **argv) {
 	return argv;
 }
 
-/* Runs the task specified in ARGV[1]. */
+/* Runs the task specified in ARGV[1]. 
+run_task(): 마지막에 a->function(argv);에 담기며 실행
+*/
 static void
 run_task (char **argv) {
 	const char *task = argv[1];
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-	if (thread_tests){
+	if (thread_tests){ 
 		run_test (task);
-	} else {
+	} else {////해당 스레드가 테스트 스레드가 아닐 경우
+	//task: argv에서 받아온 인자의 두번째 인자
 		process_wait (process_create_initd (task));
 	}
 #else
@@ -258,7 +261,11 @@ run_task (char **argv) {
    up to the null pointer sentinel. */
 static void
 run_actions (char **argv) {
-	/* An action. */
+	/* An action. 
+	name: 실행할 액션의 이름
+	argc: 받아온 인자의 개수
+	argv: 받아온 인자들
+	*/
 	struct action {
 		char *name;                       /* Action name. */
 		int argc;                         /* # of args, including action name. */
@@ -282,7 +289,7 @@ run_actions (char **argv) {
 		const struct action *a;
 		int i;
 
-		/* Find action name. */
+		/* Find action name. while문을 돌며, while문 안에서 생성하는 새로운 action 구조체 a에 action구조체 actions를 넣음. */
 		for (a = actions; ; a++)
 			if (a->name == NULL)
 				PANIC ("unknown action `%s' (use -h for help)", *argv);
@@ -295,8 +302,8 @@ run_actions (char **argv) {
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
 
 		/* Invoke action and advance. */
-		a->function (argv);
-		argv += a->argc;
+		a->function (argv);//run_task()함수는 while문 마지막 순회 회차 때 a->function(argv);에 담겨 실행.
+		argv += a->argc;//run_task()실행 끝나고 return되면 argv += argc 회차를 수행한 뒤 run_actions 수행이 끝남.
 	}
 
 }

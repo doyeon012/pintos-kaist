@@ -159,8 +159,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if (ticks % 4 == 0) {
       mlfqs_recalculate_priority ();//모든 스레드의 priority를 재계산.
       if (ticks % TIMER_FREQ == 0) {
-        mlfqs_recalculate_recent_cpu ();
         mlfqs_calculate_load_avg ();
+        mlfqs_recalculate_recent_cpu ();
       }
     }
   }

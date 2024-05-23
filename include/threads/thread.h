@@ -1,6 +1,7 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
+#include "synch.h" //semaphore 관련 헤더 파일
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -105,6 +106,20 @@ struct thread {
 	int nice;//추가한 부분. MLFQS
 	int recent_cpu;//추가한 부분. MLFQS
 	struct list_elem allelem; //추가한 부분. 모든 스레드들의 리스트
+
+	int exit_status;
+	struct file **fdt;
+	int next_fd;
+
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+
+	struct semaphore load_sema;// 현재 스레드가 load되는 중 부모가 기다리게 하기 위한 sema
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+
+	struct file *running; // 실행 중인 파일
 
 
 #ifdef USERPROG 

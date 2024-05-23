@@ -194,7 +194,13 @@ thread_print_stats (void) {
 /*추가한 부분*/
 void
 thread_preemptive(void){
-	if(!list_empty(&ready_list) && (thread_current ()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority))
+	if (thread_current() == idle_thread)
+		return;
+	if (list_empty(&ready_list))
+		return;
+	struct thread *curr = thread_current();
+	struct thread *ready = list_entry(list_front(&ready_list), struct thread, elem);
+	if (curr->priority < ready->priority) // ready_list에 현재 실행중인 스레드보다 우선순위가 높은 스레드가 있으면
 		thread_yield();
 }
 
@@ -213,33 +219,42 @@ thread_preemptive(void){
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
+/**
+ * name: 새로운 스레드의 이름. 해당 스레드는 aux를 인수로 전달하는 함수인 initd()를 실행.
+ * 본격적으로 ready_list에 추가.
+ * thread_create()가 새 스레드의 스레드 식별자를 반환.
+*/
 tid_t
-thread_create (const char *name, int priority,
-		thread_func *function, void *aux) {
+thread_create (const char *name, int priority, thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
 
 	ASSERT (function != NULL);
 
-	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO); // 페이지 할당
+	t = palloc_get_page (0); // kernel 공간을 위한 4KB의 싱글 페이지를 할당. 모든 바이트를 0으로 초기화.
 	if (t == NULL)
 		return TID_ERROR;
 
-	/* Initialize thread. */
-	init_thread (t, name, priority);
-	tid = t->tid = allocate_tid ();
+	/* 스레드 초기화 */
+	init_thread (t, name, priority); // t(4KB의 단일공간)에 스레드 구조체를 초기화. 스레드 구조체는 128byte 또는 64byte.
+	tid = t->tid = allocate_tid (); // 스레드의 고유한 tid를 할당.
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
-	t->tf.R.rsi = (uint64_t) aux;
+	t->tf.rip = (uintptr_t)kernel_thread; //명령어 포인터 레지스터. 스레드가 실행될 함수의 주소를 가리킴.
+	t->tf.R.rdi = (uint64_t)function; // 첫 번째 함수 인자를 전달. 'funtion' 포인터를 설정.
+	t->tf.R.rsi = (uint64_t)aux; // 두 번째 함수 인자를 전달. 'aux' 포인터를 설정.
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	//현재 스레드의 자식으로 추가
+	// list_push_back(&(thread_current()->child_list), &(t->child_elem));
+
+	// t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	// if(t->fdt == NULL) return TID_ERROR;
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -377,6 +392,8 @@ thread_exit (void) {
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield (void) { 
+	if(!intr_context()){
+
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
@@ -389,6 +406,7 @@ thread_yield (void) {
 	}
 	do_schedule (THREAD_READY); // 스케줄러에게 현재 스레드가 ready_list에 추가되었음을 알림.
 	intr_set_level (old_level); // 이전 인터럽트 레벨을 다시 복원하여 이전 상태로 복원함.
+	}
 }
 /*수정한 부분. ready_list에 있는 스레드들의 priority값을 비교, 내림차순으로 정렬*/
 bool
@@ -530,6 +548,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	//MLFQS를 위한 초기화. 추가한 부분.
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
+	list_push_back(&all_list, &t->allelem);//mlfqs 추가한 부분. all_list
+	
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -789,7 +809,8 @@ mlfqs_calculate_load_avg (void)
                      mult_mixed (div_fp (int_to_fp (1), int_to_fp (60)), ready_threads));
 }
 
-//1tick 마다 running 스레드의 recent_cpu + 1
+//1tick 마다 running 스레드의 recent_cpu + 1.
+//4ticks마다 thread의 priority 재계산
 void
 mlfqs_increment_recent_cpu (void)
 {
