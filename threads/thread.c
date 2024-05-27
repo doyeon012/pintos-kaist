@@ -220,9 +220,10 @@ thread_preemptive(void){
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
 /**
- * name: 새로운 스레드의 이름. 해당 스레드는 aux를 인수로 전달하는 함수인 initd()를 실행.
- * 본격적으로 ready_list에 추가.
- * thread_create()가 새 스레드의 스레드 식별자를 반환.
+ * name: 새로운 스레드의 이름. 
+ * priority: 우선순위
+ * function: 함수명
+ * aux: 보조 매개변수
 */
 tid_t
 thread_create (const char *name, int priority, thread_func *function, void *aux) {
@@ -250,11 +251,11 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	//현재 스레드의 자식으로 추가
-	// list_push_back(&(thread_current()->child_list), &(t->child_elem));
+	//현재 스레드의 자식으로 추가. 가장 최근에 추가시켜줌.
+	list_push_back(&(thread_current()->child_list), &(t->child_elem));
 
-	// t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-	// if(t->fdt == NULL) return TID_ERROR;
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);//fdt 할당
+	if(t->fdt == NULL) return TID_ERROR;
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -378,6 +379,12 @@ thread_exit (void) {
 	ASSERT (!intr_context ());
 
 #ifdef USERPROG
+	/**
+	* fdt의 모든 파일을 닫고 메모리 반환. 현재 실행 중인 파일도 닫음.
+	* 자식이 종료되기를 wait하는 부모에게 sema_up 으로 sig를 보냄.
+	* 부모가 wait을 마무리하고 나서 sig를 보내줄 때까지 대기.
+	* 해당 대기가 풀리고 나면 scheduling이 이어짐.
+	*/
 	process_exit ();
 #endif
 
@@ -549,6 +556,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
 	list_push_back(&all_list, &t->allelem);//mlfqs 추가한 부분. all_list
+
+	t->exit_status = 0;//exit_status 초기화
+	t->next_fd = 2;//stdin:0, stdout:1 이기 때문에
+	//load_sema, exit_sema, wait_sema 초기화
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	list_init(&(t->child_list));
 	
 }
 

@@ -1,8 +1,11 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "threads/mmu.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "userprog/process.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -61,12 +64,21 @@ err:
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
+// spt에서 va에 해당하는 page를 찾아서 반환
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
+	page = (struct page *)malloc(sizeof(struct page));
+	struct hash_elem *e;
 
-	return page;
+	// va에 해당하는 hash_elem 찾기
+	page->va = pg_round_down(va); // page의 시작 주소 할당
+	e = hash_find(&spt->spt_hash, &page->hash_elem);
+	free(page);
+
+	// 있으면 e에 해당하는 페이지 반환
+	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
 /* Insert PAGE into spt with validation. */

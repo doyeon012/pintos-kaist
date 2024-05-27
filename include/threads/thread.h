@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #ifdef VM
-#include "vm/vm.h"
+#include "/pintos-kaist/include/vm/vm.h"
 #endif
 
 
@@ -28,7 +28,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
+/* 파일 디스크립터 테이블 초기화를 위한 매크로*/
+#define FDT_PAGES 2 //fdt에 할당할 페이지 수
+#define FDT_COUNT_LIMIT 128 // fdt의 최대 크기
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -108,15 +110,22 @@ struct thread {
 	struct list_elem allelem; //추가한 부분. 모든 스레드들의 리스트
 
 	int exit_status;
-	struct file **fdt;
-	int next_fd;
+	struct file **fdt;//파일 디스크립터 테이블. 각 프로세스가 가지고 있는 파일 객체와 연결된 fd의 배열.
+	int next_fd;//다음에 할당할 파일 디스크립터 번호
 
 	struct intr_frame parent_if;
 	struct list child_list;
 	struct list_elem child_elem;
 
-	struct semaphore load_sema;// 현재 스레드가 load되는 중 부모가 기다리게 하기 위한 sema
+	// 새로운 스레드가 실행 파일을 성공적으로 load할 때까지 부모 스레드가 기다리도록 함
+	// 스레드가 실행 파일을 성공적으로 load했을 때 sema_up(&child->load_sema);를 호출, 부모 스레드를 깨움.
+	struct semaphore load_sema;
+	// 자식 스레드가 종료될 때, 부모 스레드가 자식 스레드의 종료를 처리할 시간을 주기 위해 사용.
+	// sema_down(&curr->exit_sema);를 호출해 대기 상태로 들어감, 
+	// 부모 스레드가 sema_up(&child->exit_sema);를 호출해 자식 스레드를 깨움.
 	struct semaphore exit_sema;
+	// 부모 스레드가 자식 스레드의 종료를 기다릴 때 사용. 자식 스레드가 종료될 때
+	// sema_up(&curr->wait_sema); 를 호출, 부모 스레드를 깨움.
 	struct semaphore wait_sema;
 
 	struct file *running; // 실행 중인 파일
@@ -128,7 +137,8 @@ struct thread {
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
+	struct supplemental_page_table spt;//추가한 부분
+	void* rsp;//추가한 부분
 #endif
 
 	/* Owned by thread.c. */

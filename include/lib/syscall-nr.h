@@ -4,11 +4,11 @@
 /* System call numbers. */
 enum {
 	/* Projects 2 and later. */
-	SYS_HALT,                   /* Halt the operating system. */
-	SYS_EXIT,                   /* Terminate this process. */
-	SYS_FORK,                   /* Clone current process. */
-	SYS_EXEC,                   /* Switch current process. */
-	SYS_WAIT,                   /* Wait for a child process to die. */
+	SYS_HALT,                   /* 0 Halt the operating system. */
+	SYS_EXIT,                   /* 1 Terminate this process. */
+	SYS_FORK,                   /* 2 Clone current process. */
+	SYS_EXEC,                   /* 3 Switch current process. */
+	SYS_WAIT,                   /* 4 Wait for a child process to die. */
 	SYS_CREATE,                 /* Create a file. */
 	SYS_REMOVE,                 /* Delete a file. */
 	SYS_OPEN,                   /* Open a file. */
