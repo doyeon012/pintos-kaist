@@ -151,13 +151,13 @@ exit(int status){
 bool
 create(const char *file, unsigned initial_size){
 	check_address(file);
-	bool success = filesys_create(file, initial_size);
-	return success;
+	return filesys_create(file, initial_size);
 }
 
 //file 이름에 해당하는 파일 지우기
 bool
 remove(const char* file){
+	check_address(file);
 	if(file == NULL) exit(-1);
 	return filesys_remove(file);
 }
@@ -226,8 +226,8 @@ int read(int fd, void *buffer, unsigned size)
 	char *ptr = (char *)buffer;
 	int bytes_read = 0;
 
-	lock_acquire(&filesys_lock);
-	if (fd == STDIN_FILENO)
+	lock_acquire(&filesys_lock);//file system lock 획득
+	if (fd == 0)
 	{
 		for (int i = 0; i < size; i++)
 		{
@@ -267,8 +267,8 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, const void *buffer, unsigned size)
 {
 	check_address(buffer);
-	int bytes_write = 0;
-	if (fd == STDOUT_FILENO)
+	int bytes_write = 0;//
+	if (fd == 1)
 	{
 		putbuf(buffer, size);
 		bytes_write = size;
@@ -287,13 +287,17 @@ int write(int fd, const void *buffer, unsigned size)
 	return bytes_write;
 }
 
+//부모 프로세스, 자식 프로세스 모두에서 호출. 부모 프로세스는 자식pid 반환, 자식은 0을 반환.
 tid_t fork(const char *thread_name, struct intr_frame *f)
 {
 	return process_fork(thread_name, f);
 }
 
-int exec(const char *cmd_line) //자식 프로세스를 생성, 프로그램을 실행시키는 syscall
+//logic: 부모 프로세스가 fork를 호출, 자식 프로세스를 생성.
+//자식은 fork()의 반환값을 검사, 자식에서 exec를 호출해 새로운 프로그램을 실행.
+int exec(const char *cmd_line)
 {
+	// *cmd_line 의 유효성 검사
 	check_address(cmd_line);
 
 	// process.c 파일의 process_create_initd 함수와 유사하다.
@@ -316,7 +320,7 @@ int exec(const char *cmd_line) //자식 프로세스를 생성, 프로그램을 
 
 int wait(int pid)
 {
-/* userprog/process.c
+/* 
  * thread 식별자 tid가 종료될 때까지 기다리고, exit status를 반환.
  * thread가 커널에 의해 종료되었을 경우 -1 반환. 
  * TID가 유효하지 않거나,thread가 자식 스레드가 아니거나, 해당하는 tid에 대해 process_wait()가 호출되었으면 즉시 -1 반환

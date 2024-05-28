@@ -44,8 +44,9 @@ process_init (void) {
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
 /**
- * file_name: parsing해야 하는 command line.
- * 여기서 parsing해서 얻은 파일 이름이 thread_create 함수의 첫번쨰 인자로 들어가야 함.
+ * file_name을 인자로 받음
+ * 새로운 스레드를 생성(tid)
+ * tid 반환
 */
 tid_t
 process_create_initd (const char *file_name) {
@@ -61,9 +62,8 @@ process_create_initd (const char *file_name) {
 	strlcpy(fn_copy, file_name, PGSIZE);//fn_copy에 file_name을 복사. PGSIZE: 4KB
 
 	char *save_ptr;//strtok_r을 사용하기 위한 변수
-	// printf("file_name: %s\n", file_name);//args-single onrarg
+	// " "이전의 문자열(1st token)를 file_name에 저장
 	strtok_r(file_name, " ", &save_ptr);
-	// printf("file_name: %s\n", file_name);//args-single
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
@@ -173,14 +173,14 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {//부모의 VM 공간을 복
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
-	struct thread *current = thread_current ();
+	struct thread *parent = (struct thread *) aux;// 부모 프로세스의 정보
+	struct thread *current = thread_current ();// 현재 실행 중인 자식 프로세스
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->parent_if;//부모의 if를 가져옴
+	struct intr_frame *parent_if = &parent->parent_if;//부모의 interruptFrame를 가져옴
 	bool success = true;
 
 	/* 1. Read the cpu context to local stack. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	memcpy (&if_, parent_if, sizeof (struct intr_frame));// 부모의 if를 자식의 로컬 스택에 복사
 	if_.R.rax = 0;//자식 프로세스의 return값은 0
 
 	/* 2. Duplicate PT */
@@ -188,7 +188,11 @@ __do_fork (void *aux) {
 	if (current->pml4 == NULL)
 		goto error;
 
-	process_activate (current);
+	process_activate (current);//자식 프로세스의 pml4를 활성화
+/**
+ * VM을 사용하는 경우 보조 페이지 테이블을 초기화하고 복사.
+ * 그렇지 않은 경우 페이지 테이블 항목을 복사.
+ */	
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
@@ -202,14 +206,15 @@ __do_fork (void *aux) {
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
-	 // FDT 복사
+	 * TODO:       the resources of parent
+	 * */
+	 //부모의fdt를 자식에 복사
 	for (int i = 0; i < 128; i++)
 	{
 		struct file *file = parent->fdt[i];
 		if (file == NULL)
 			continue;
-		if (file > 2)
+		if (file > 2)//stdin, sdtout, stderr 제외
 			file = file_duplicate(file);
 		current->fdt[i] = file;
 	}
@@ -217,12 +222,13 @@ __do_fork (void *aux) {
 
 	// 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
 	sema_up(&current->load_sema);
-	process_init();
+	process_init();//자식 프로세스 초기화
 
 	/* Finally, switch to the newly created process. */
 	if (success)
-		do_iret (&if_);
+		do_iret (&if_);//성공 시 자식의 if 사용, 실행을 시작
 error:
+	// 에러가 발생하면 부모 프로세스를 해제하고 자식 프로세스를 종료
 	sema_up(&current ->load_sema);//로드가 완료될 때까지 기다리고 있던 부모 대기 해제
 	exit(TID_ERROR);//fork 실패 시 exit
 	// thread_exit ();
@@ -323,7 +329,6 @@ process_exit (void) {
 	 file_close(curr->running);//현재 실행 중인 파일도 닫음.
 
 	process_cleanup ();
-	// hash_destroy(&curr->spt.spt_hash, NULL);
 	//종료 중인 스레드가 자신의 종료를 기다리고 있는 부모 스레드에게 sig를 보냄. 부모가 대기에서 깨어남.
 	sema_up(&curr->wait_sema);
 	// 부모의 sign 기다림. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다.
@@ -485,7 +490,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
+	t->pml4 = pml4_create ();//pml4테이블: 64비트 주소 공간을 512개의 64비트 엔트리로 나누어 관리
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
@@ -496,6 +501,12 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	/* 추가한 부분.
+	 * load()를 한 후 실행한 파일의 쓰기 권한을 deny_write해야 함.
+	 * rox
+	 */
+    t->running = file;
+    file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -576,7 +587,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	//여기에서 file_close()를 해주면 file이 닫히면서 lock이 풀린다.
+	// file_close (file);
 	return success;
 }
 
