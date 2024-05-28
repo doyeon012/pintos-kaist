@@ -1,6 +1,9 @@
 {
   "files.associations": {
     "interrupt.h": "c",
-    "inttypes.h": "c"
+    "inttypes.h": "c",
+    "syscall.h": "c",
+    "synch.h": "c",
+    "console.h": "c"
   }
 }

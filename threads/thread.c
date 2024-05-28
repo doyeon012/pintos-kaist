@@ -8,7 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
-#include "threads/synch.h"  
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "threads/fixed_point.h"
@@ -246,6 +246,20 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	/* add code_pro2*/
+	// t->pid = tid;									  // pid 값에 tid 값을 넣음
+	struct thread *curr = thread_current();			  // 현재 실행중인 프로세스가 부모 프로세스이다.
+	t->parent_process = curr;						  // 부모 프로세스 저장
+	t->is_program_loaded = 0;						  // 프로그램이 로드되지 않음
+	t->is_program_exit = 0;							  // 프로그램이 종료되지 않음
+	sema_init(&t->sema_load, 0);					  // load 세마포어 0으로 초기화
+	sema_init(&t->sema_exit, 0);					  // exit 세마포어 0으로 초기화
+	list_push_back(&curr->child_list, &t->c_elem); // 부모 프로세스의 자식리스트에 추가
+	
+	t->max_fd= 2;		// fd 값 초기화   
+	
+	/* add code_pro2*/
+
 	/* Add to run queue. */
 	thread_unblock(t);
 
@@ -339,6 +353,9 @@ void thread_exit(void)
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable();
+	struct thread *curr = thread_current();
+	curr->is_program_exit = 1;	// 프로세스 종료 알림   
+	sema_up(&curr->sema_exit);	// 부모 프로세스가 ready_list에 들어갈 수 있도록 sema_up
 	do_schedule(THREAD_DYING);
 	NOT_REACHED();
 }
@@ -431,7 +448,7 @@ int thread_get_nice(void)
 	old_level = intr_disable(); // interrupt 활성화
 	int temp = thread_current()->nice;
 	intr_set_level(old_level); // interrupt 비 활성화
-	return temp;	// 현재 thread의 nice 값 반환 
+	return temp;			   // 현재 thread의 nice 값 반환
 }
 
 /* Returns 100 times the system load average. */
@@ -442,7 +459,7 @@ int thread_get_load_avg(void)
 	enum intr_level old_level;
 	old_level = intr_disable();
 
-	int temp = TO_INTEGER_ROUND(load_average * 100);		// 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
+	int temp = TO_INTEGER_ROUND(load_average * 100); // 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
 
 	intr_set_level(old_level);
 
@@ -457,7 +474,7 @@ int thread_get_recent_cpu(void)
 	enum intr_level old_level;
 	old_level = intr_disable();
 
-	int temp = TO_INTEGER_ROUND(thread_current()->recent_cpu * 100);	// 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
+	int temp = TO_INTEGER_ROUND(thread_current()->recent_cpu * 100); // 출력되는 값이므로 정수형으로 바꿔준 후 출력한다.
 
 	intr_set_level(old_level);
 	return temp;
@@ -535,8 +552,11 @@ init_thread(struct thread *t, const char *name, int priority)
 	// nice값과 recent_cpu값을 초기화 한다.
 	t->nice = 0;							 // add code
 	t->recent_cpu = 0;						 // add code
-	list_push_back(&all_list, &t->all_elem); // add code
-											 // 모든 thread가 초기화 될 때 all_list에 넣어준다.
+	list_push_back(&all_list, &t->all_elem); // add code	// 모든 thread가 초기화 될 때 all_list에 넣어준다.
+
+	/* add code_pro2*/
+	list_init(&t->child_list); // 자식 리스트 초기화
+							   /* add code_pro2*/
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -671,7 +691,7 @@ do_schedule(int status)
 	{
 		struct thread *victim =
 			list_entry(list_pop_front(&destruction_req), struct thread, elem);
-		list_remove(&victim->all_elem);		// 삭제되는 thread = victim이므로 해당 쓰레드의 all_elem값을 삭제 
+		list_remove(&victim->all_elem); // 삭제되는 thread = victim이므로 해당 쓰레드의 all_elem값을 삭제
 		palloc_free_page(victim);
 	}
 	thread_current()->status = status;

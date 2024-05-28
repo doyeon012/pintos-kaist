@@ -27,6 +27,8 @@ static void process_cleanup(void);
 static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
+struct thread *get_child_process (int tid);
+void remove_child_process(struct thread *cp);
 
 /* General process initializer for initd and other process. */
 static void
@@ -41,7 +43,7 @@ process_init(void)
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
 
-/* user 영역의 첫 번째 프로그램인 "initd"를 file_name에서 로드하여 시작한다. */
+/* user 영역의 첫 번째 프로그램인 "initd"를 file_name에서 로드하여 시작한다. (=process_excute)*/
 tid_t process_create_initd(const char *file_name)
 {
 	char *fn_copy;
@@ -70,7 +72,67 @@ tid_t process_create_initd(const char *file_name)
 		palloc_free_page(fn_copy);
 	return tid;
 }
+/* add function pro2*/
 
+// 자식리스트를 pid로 검색하여 해당 프로세스 디스크립터(thread)를 반환 
+struct thread *get_child_process (int tid){
+	struct thread *t = thread_current();
+	if(!tid){
+		return NULL;
+	}
+	else{
+		struct list_elem *child_list_first = list_begin(&t->child_list);
+		while(child_list_first != list_end(&t->child_list)){
+			struct thread *first_thread = list_entry(child_list_first, struct thread, c_elem);
+			if (first_thread->tid == tid){
+				return first_thread;
+			}
+			child_list_first = child_list_first->next;
+		}
+		return NULL;
+	}
+}
+// 부모 프로세스의 자식 리스트에서 프로세스 디스크립터(thread) 제거
+void remove_child_process(struct thread *cp){
+	list_remove(&cp->c_elem);
+}
+
+// 파일 객체에 대한 파일 디스크립터 생성   
+int process_add_file(struct file *f){
+	struct thread *curr = thread_current();
+	for(int fd = 2; fd < MAX_FD; fd++){
+		if(curr->fd_table[fd] == NULL){
+			curr->fd_table[fd] = f;
+			// if(fd < MAX_FD && curr->max_fd < fd+1){
+			// 	curr->max_fd = fd+1;
+			// }
+			return fd;
+		}
+	}
+	return -1;
+}
+
+// 프로세스의 파일 디스크립터 테이블을 검색하여 파일 객체의 주소를 리턴   
+struct file *process_get_file(int fd){
+	struct thread *t = thread_current();
+	if (2 <= fd < MAX_FD)
+	{
+		if (t->fd_table[fd] != NULL){
+			return t->fd_table[fd];
+		}
+	}
+	return NULL;
+}
+
+// 파일 디스크립터에 해당하는 파일을 닫고 해당 엔트리 초기화   
+void process_close_file(int fd){
+	struct thread *t = thread_current();
+	if (2 <= fd < MAX_FD){
+		file_close(t->fd_table[fd]);
+		t->fd_table[fd] = NULL;	
+	}
+}
+/* add function pro2*/
 /* A thread function that launches first user process. */
 static void
 initd(void *f_name)
@@ -209,6 +271,7 @@ void argument_stack(char **parse, int count, void **rsp)
 	{
 		*rsp -= sizeof(char *);
 		*(char **)(*rsp) = arg_ptr[i];
+		// printf("rsp주소가 가리키는 값\n%p\n",*rsp);
 	}
 	// argv 포인터를 push
 
@@ -226,13 +289,14 @@ void argument_stack(char **parse, int count, void **rsp)
 	
 	*rsp -= sizeof(void *);
 	*(void **)(*rsp) = 0;
+	
 }
 /* add function - gdy_pro2*/
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
 
-/* 현재 실행 컨텍스트를 f_name으로 전환한다. 실패 시 -1을 반환 */
+/* 현재 실행 컨텍스트를 f_name으로 전환한다. 실패 시 -1을 반환 (= start_process)*/
 int process_exec(void *f_name)
 {
 	char *file_name = f_name;
@@ -259,6 +323,10 @@ int process_exec(void *f_name)
 		 token = strtok_r(NULL, " ", &save_ptr))
 	{
 		parse[count] = token;
+		
+		// parse[count] = palloc_get_page(0); // 토큰의 복사본을 저장할 메모리 할당
+		// strlcpy(parse[count], token, PGSIZE); // 토큰의 내용을 복사하여 parse 배열에 저장
+		// count++;
 		// printf("parse1: %s \n", parse[count]);
 		count++;
 		
@@ -266,22 +334,31 @@ int process_exec(void *f_name)
 	/* add code - gdy_pro2*/
 	/* 프로그램을 메모리에 적재 */
 	success = load(parse[0], &_if); // load에 파일이름만 넘겨준다.
-	/* add code - gdy_pro2*/
-	if (!success){
-		palloc_free_page(file_name);
-		return -1;
-	}
+	thread_current() ->is_program_loaded = success;
+	// 메모리 적재 완료 -> 부모 프로세스 다시 진행   
+	sema_up(&thread_current()->sema_load);
 
+	/* add code - gdy_pro2*/
+	
+	 
 	argument_stack(parse, count, &_if.rsp); // 파싱한 문자들을 담은 배열(parse), 인자의 개수(count), 스택 포인터(rsp)를 넣어준다.
 	// 메모리 내용을 16진수로 화면에 출력한다. (유저 스택에 인자를 저장 후 유저 스택 메모리 확인)
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	_if.R.rsi = _if.rsp + sizeof(void *);
+	_if.R.rdi = count;
+	// printf("ffffff\n%p\n",_if.R.rsi);
+	// printf("aaaaaa\n%d\n",_if.R.rdi);
 	/* add code - gdy_pro2*/
 
 	/* If load failed, quit. */
 	// argument_stack으로 parse를 전달해준 이후에 palloc_free_page를 통해 file_name이 가리키는 메모리를 해제한다.
 	palloc_free_page(file_name);
-
+	if (!success){
+		remove_child_process(thread_current());			// load 실패 -> 프로그램에 메모리적재 실패 시 child_list에서 삭제 
+		palloc_free_page(thread_current());
+		thread_exit();
+		// return -1;
+	}
 	/* Start switched process. */
 	do_iret(&_if);
 	NOT_REACHED();
@@ -298,25 +375,22 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	while (child_tid)
-	{
-		// 임의로 무한 루프 설정
+	struct thread *t =get_child_process(child_tid);
+	if (t == NULL){
+		return -1;
 	}
-	return -1;
+	sema_down(&t->sema_exit);
+	remove_child_process(t);
+	return t->exit_status;
+	
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
-	struct thread *curr = thread_current();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	for(int fd = 2; fd < MAX_FD; fd++){
+		process_close_file(fd);
+	}
 	process_cleanup();
 }
 

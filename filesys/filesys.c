@@ -57,6 +57,8 @@ filesys_done (void) {
  * Returns true if successful, false otherwise.
  * Fails if a file named NAME already exists,
  * or if internal memory allocation fails. */
+
+// 주어진 크기로 name이라는 파일 생성  
 bool
 filesys_create (const char *name, off_t initial_size) {
 	disk_sector_t inode_sector = 0;
@@ -93,6 +95,8 @@ filesys_open (const char *name) {
  * Returns true if successful, false on failure.
  * Fails if no file named NAME exists,
  * or if an internal memory allocation fails. */
+
+// 해당 name의 파일 제거   
 bool
 filesys_remove (const char *name) {
 	struct dir *dir = dir_open_root ();

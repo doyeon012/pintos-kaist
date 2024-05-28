@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
+// #include "user/syscall.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -28,6 +30,7 @@ typedef int tid_t;
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
+#define MAX_FD 128		// 테이블 최대 크기   
 
 /* A kernel thread or user process.
  *
@@ -103,10 +106,26 @@ struct thread
 	struct list_elem all_elem; /* all_elem*/
 	struct list donations;	   /* add donations */
 	int nice;				   /*add struct*/
-	int recent_cpu;		   /*add struct*/
+	int recent_cpu;			   /*add struct*/
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
+	/* add code_pro2*/
+
+	// pid_t pid;
+	struct thread *parent_process; // 부모 프로세스 디스크립터를 가리키는 필드 추가
+	struct list_elem c_elem;	   // 자식 리스트 element
+	struct list child_list;		   // 자식 리스트
+	bool is_program_loaded;		   // 프로세스의 프로그램 메모리 적재 유무
+	bool is_program_exit;		   // 프로세스 종료 유무 확인
+	struct semaphore sema_load;	   // load 세마포어
+	struct semaphore sema_exit;	   // exit 세마포어
+	int exit_status;			   // exit 호출 시 종료 status
+
+	struct file *fd_table[MAX_FD]; // 파일 디스크립터 테이블
+	int max_fd;					// 현재 테이블에 존재하는 fd값의 최대값 +1;
+
+	/* add code_pro2*/
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
