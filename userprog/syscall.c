@@ -124,6 +124,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		close(f->R.rdi);
 		break;
 	default:
+		exit(-1);//추가
 		break;
 	}
 	// thread_exit (); ㅏㅏㅏㅏㅏ,,,,미친
