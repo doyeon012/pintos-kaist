@@ -19,12 +19,12 @@ Executing 'args-none':
 (args) end
 args-none: exit(0)
 Execution of 'args-none' complete.
-Timer: 259 ticks
-Thread: 150 idle ticks, 80 kernel ticks, 31 user ticks
+Timer: 122 ticks
+Thread: 44 idle ticks, 64 kernel ticks, 15 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes
-Console: 899 characters output
+Console: 898 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

@@ -67,8 +67,11 @@ process_create_initd (const char *file_name) {
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
+	//수정. error 반환
+	if (tid == TID_ERROR){
 		palloc_free_page(fn_copy);
+		return TID_ERROR;
+	}
 	return tid;
 }
 
@@ -110,12 +113,6 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	// 자식이 로드되다가 오류로 exit한 경우
 	if (child->exit_status == TID_ERROR)
 	{
-		// 자식이 종료되었으므로 자식 리스트에서 제거한다.
-		// 이거 넣으면 간헐적으로 실패함 (syn-read)
-		// list_remove(&child->child_elem);
-		// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
-		// sema_up(&child->exit_sema);
-		// 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
 		return TID_ERROR;
 	}
 
