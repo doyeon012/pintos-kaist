@@ -30,7 +30,7 @@ int read(int fd, void *buffer, unsigned size);
 int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
-tid_t fork (const char *thread_name);
+tid_t fork (const char *thread_name, struct intr_frame *f);
 
 /* add function gdy_pro2*/
 
@@ -79,7 +79,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
-		f->R.rax = fork(f->R.rdi);
+		f->R.rax = fork(f->R.rdi,f);
 		break;
 	case SYS_EXEC:
 		f->R.rax = exec(f->R.rdi);
@@ -306,7 +306,9 @@ void close(int fd)
 	process_close_file(fd);
 }
 
-tid_t fork (const char *thread_name){
-
+// 자식 프로세스 생성  
+tid_t fork (const char *thread_name, struct intr_frame *f){
+	return process_fork(thread_name,f);
 }
+
 /* add function gdy_pro2*/

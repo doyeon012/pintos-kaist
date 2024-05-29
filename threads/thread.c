@@ -254,6 +254,7 @@ tid_t thread_create(const char *name, int priority,
 	t->is_program_exit = 0;						   // 프로그램이 종료되지 않음
 	sema_init(&t->sema_load, 0);				   // load 세마포어 0으로 초기화
 	sema_init(&t->sema_exit, 0);				   // exit 세마포어 0으로 초기화
+	sema_init(&t->sema_wait, 0);				   // wait 세마포어 0으로 초기화   
 	list_push_back(&curr->child_list, &t->c_elem); // 부모 프로세스의 자식리스트에 추가
 	t->fd_table[0] = 0;
 	t->fd_table[1] = 1;

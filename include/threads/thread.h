@@ -120,11 +120,13 @@ struct thread
 	bool is_program_exit;		   // 프로세스 종료 유무 확인
 	struct semaphore sema_load;	   // load 세마포어
 	struct semaphore sema_exit;	   // exit 세마포어
+	struct semaphore sema_wait;    // wait  세마포어 // fork에 사용  
 	int exit_status;			   // exit 호출 시 종료 status
 
 	struct file *fd_table[MAX_FD]; // 파일 디스크립터 테이블
 	int max_fd;					// 현재 테이블에 존재하는 fd값의 최대값 +1;
 	// struct file *running;
+	struct intr_frame parent_if;
 
 	/* add code_pro2*/
 

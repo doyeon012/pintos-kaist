@@ -154,17 +154,26 @@ initd(void *f_name)
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+	struct thread *curr = thread_current();		
+	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));	//  parent_if(인터럽트 프레임)에 fork 함수를 통해 받는 if_를 복사한다.  
+	// 현재 스레드를 fork한 new 스레드를 생성   
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);		// 인자로는 if_를 복사한 parent_if를 가지고 있는 스레드 = curr을 넣어줌  
+	if (tid == TID_ERROR){
+		return TID_ERROR;
+	}
+	// 생성된 자식 스레드 찾기   
+	struct thread *child = get_child_process(tid);
+	sema_down(&child->sema_wait);	// 로드 완료될 때까지 부모 스레드 대기 
+	return tid;
 }
 
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
 
-// 부모의 주소 공간을 복제하기 위해 이 함수를 pml4_for_each에 전달
+// 부모의 주소 공간을 복제하기 위해 이 함수를 pml4_for_each에 전달 - 복제가 성공적으로 되었을 때 true 반환   
 static bool
-duplicate_pte(uint64_t *pte, void *va, void *aux)
+duplicate_pte(uint64_t *pte, void *va, void *aux)		// pte: 페이지 테이블 엔트리를 가리키는 포인터 .. va : 가상 주소 포인터 .. aux : 부모 스레드를 가리키는 포인터  
 {
 	struct thread *current = thread_current();
 	struct thread *parent = (struct thread *)aux;
@@ -173,29 +182,42 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-	// TODO: 만약 부모 페이지가 커널 페이지라면 즉시 반환   
+	// TODO: 만약 부모 페이지가 커널 페이지라면 즉시 반환 (복제 x)
+	if (is_kernel_vaddr(va)){
+		return true;
+	}  
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 
 	// TODO: 부모의 맵 레벨 4에서 가상주소를 해석   
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL){
+		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	// 자식을 위해 새로운 PAL_USER 페이지를 할당하고 결과를 NEWPAGE로 설정   
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO);		// PAL_USER : 사용자 영역에 페이지를 할당 .. PAL_ZERO : 새로 할당된 페이지를 0으로 초기화 
+	// -> 사용자 영역에 0으로 초기화된 새 페이지를 할당하고, 그 주소를 'newpage'에 할당   
+	if (newpage == NULL){
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
 	// 부모의 페이지를 새 페이지로 복제하고 부모 페이지가 쓰기 가능한지 확인 (결과에 따라 WRITABLE을 설정)  
-
+	memcpy(newpage,parent_page, PGSIZE);
+	writable = is_writable(pte);
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	// WRITABLE 권한으로 주소 VA에서 자식의 페이지 테이블에 새 페이지를 추가  
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
-		// 페이지 삽입에 실패하면 오류 처리를 수행   
+		// 페이지 삽입에 실패하면 오류 처리를 수행
+		return false;  
 	}
 	return true;
 }
@@ -215,14 +237,14 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	/*TODO: 어떻게든 부모의 인터럽트 프레임(parent_if)를 전달 (process_fork()'s의 if_)*/
-	struct intr_frame *parent_if;
+	/* TODO: 어떻게든 부모의 인터럽트 프레임(parent_if)를 전달 (process_fork()'s의 if_)*/
+	struct intr_frame *parent_if = &parent->parent_if;	// 부모 인터럽트 프레임 전달 
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	/* cpu 컨텍스트를 로컬 스택으로 읽어 들인다.*/
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
-
+	if_.R.rax = 0;		// 자식 프로세스의 리턴 값은 0   
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
@@ -245,7 +267,17 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent.*/
 
 	// 파일 객체를 복제 하려면  include/filesys/file.h에 있는 file_duplicate를 사용
-	// 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안된다.  
+	// 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안된다.
+	// fdt 복제  (파일 디스크립터 테이블)   
+	for(int i =2; i< MAX_FD ;i++){
+		struct file  *f = parent->fd_table[i];
+		if (f != NULL){
+			current->fd_table[i]=file_duplicate(f);
+		}
+	} 
+	current->max_fd= parent->max_fd;
+
+	sema_up(&current->sema_wait);
 	process_init();
 
 	/* Finally, switch to the newly created process. */
@@ -253,7 +285,9 @@ __do_fork(void *aux)
 	if (succ)
 		do_iret(&if_);
 error:
+	sema_up(&current->sema_wait);
 	thread_exit();
+	// exit(TID_ERROR);
 }
 
 /* add function - gdy_pro2*/

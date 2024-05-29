@@ -6,6 +6,9 @@
     "synch.h": "c",
     "console.h": "c",
     "process.h": "c",
-    "*.inc": "c"
+    "*.inc": "c",
+    "palloc.h": "c",
+    "filesys.h": "c",
+    "file.h": "c"
   }
 }
