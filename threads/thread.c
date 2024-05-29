@@ -354,7 +354,7 @@ void thread_exit(void)
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable();
 	struct thread *curr = thread_current();
-	curr->is_program_exit = 1;	// 프로세스 종료 알림   
+	// curr->is_program_exit = 1;	// 프로세스 종료 알림 -> ??이거 어디 반영?  
 	sema_up(&curr->sema_exit);	// 부모 프로세스가 ready_list에 들어갈 수 있도록 sema_up
 	do_schedule(THREAD_DYING);
 	NOT_REACHED();
@@ -556,7 +556,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	/* add code_pro2*/
 	list_init(&t->child_list); // 자식 리스트 초기화
-							   /* add code_pro2*/
+	/* add code_pro2*/
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

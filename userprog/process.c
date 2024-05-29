@@ -74,7 +74,7 @@ tid_t process_create_initd(const char *file_name)
 }
 /* add function pro2*/
 
-// 자식리스트를 pid로 검색하여 해당 프로세스 디스크립터(thread)를 반환 
+// 자식리스트를 tid로 검색하여 해당 프로세스 디스크립터(thread)를 반환 
 struct thread *get_child_process (int tid){
 	struct thread *t = thread_current();
 	if(!tid){
@@ -87,7 +87,7 @@ struct thread *get_child_process (int tid){
 			if (first_thread->tid == tid){
 				return first_thread;
 			}
-			child_list_first = child_list_first->next;
+			child_list_first = list_next(child_list_first);   
 		}
 		return NULL;
 	}
@@ -100,13 +100,11 @@ void remove_child_process(struct thread *cp){
 // 파일 객체에 대한 파일 디스크립터 생성   
 int process_add_file(struct file *f){
 	struct thread *curr = thread_current();
-	for(int fd = 2; fd < MAX_FD; fd++){
-		if(curr->fd_table[fd] == NULL){
-			curr->fd_table[fd] = f;
-			// if(fd < MAX_FD && curr->max_fd < fd+1){
-			// 	curr->max_fd = fd+1;
-			// }
-			return fd;
+	for(int fd=2; fd<MAX_FD; fd++){
+		if(curr->fd_table[fd]==NULL){
+			curr->fd_table[fd] = f;		// 해당 파일 객체에 파일 디스크립터 부여
+			curr->max_fd = fd +1;
+			return fd;		// 파일 디스크립터 리턴
 		}
 	}
 	return -1;
@@ -131,6 +129,7 @@ void process_close_file(int fd){
 		file_close(t->fd_table[fd]);
 		t->fd_table[fd] = NULL;	
 	}
+
 }
 /* add function pro2*/
 /* A thread function that launches first user process. */
@@ -334,9 +333,9 @@ int process_exec(void *f_name)
 	/* add code - gdy_pro2*/
 	/* 프로그램을 메모리에 적재 */
 	success = load(parse[0], &_if); // load에 파일이름만 넘겨준다.
-	thread_current() ->is_program_loaded = success;
+	thread_current() ->is_program_loaded = success;  
 	// 메모리 적재 완료 -> 부모 프로세스 다시 진행   
-	sema_up(&thread_current()->sema_load);
+	sema_up(&thread_current()->sema_load);    // 
 
 	/* add code - gdy_pro2*/
 	
@@ -355,10 +354,11 @@ int process_exec(void *f_name)
 	palloc_free_page(file_name);
 	if (!success){
 		remove_child_process(thread_current());			// load 실패 -> 프로그램에 메모리적재 실패 시 child_list에서 삭제 
-		palloc_free_page(thread_current());
-		thread_exit();
+		// palloc_free_page(thread_current());
+		thread_exit();		//
 		// return -1;
 	}
+	
 	/* Start switched process. */
 	do_iret(&_if);
 	NOT_REACHED();
@@ -379,10 +379,10 @@ int process_wait(tid_t child_tid UNUSED)
 	if (t == NULL){
 		return -1;
 	}
-	sema_down(&t->sema_exit);
-	remove_child_process(t);
+	sema_down(&t->sema_exit);    // sema  매개변수 설정 ??
+	remove_child_process(t);		// 스레드 메모리 해제 ????
+	// palloc_free_page(t);
 	return t->exit_status;
-	
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -391,6 +391,7 @@ void process_exit(void)
 	for(int fd = 2; fd < MAX_FD; fd++){
 		process_close_file(fd);
 	}
+	// file_close(thread_current()->running);		// add_code, 실행중인 파일도 닫기 (load에서 갱신)
 	process_cleanup();
 }
 
@@ -522,6 +523,9 @@ load(const char *file_name, struct intr_frame *if_)
 		printf("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	// t->running = file;
+	// // add code pro2
+	// file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64

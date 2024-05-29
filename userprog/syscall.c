@@ -152,7 +152,7 @@ void check_address(void *addr)
 }
 
 // 자식 프로세스를 생성하고 프로그램을 실행시키는 시스템 콜
-tid_t exec(const char *cmd_line)
+tid_t exec(const char *cmd_line)           // 자식  프로세스 생성 xxx????
 {
 	check_address(cmd_line);
 	tid_t child_tid = process_create_initd(cmd_line);			// 자식 프로세스 생성
@@ -161,7 +161,7 @@ tid_t exec(const char *cmd_line)
 	{
 		return -1;
 	}
-	sema_down(&child_thread->sema_load); // 자식 프로세스의 프로그램이 적재될 때까지 대기
+	sema_down(&child_thread->sema_load); // 자식 프로세스의 프로그램이 적재될 때까지 대기          // sema_down 매개변수 ??
 	if (child_thread->is_program_loaded)
 	{ // 프로그램 적재 성공 시 자식 프로세스의 tid 리턴
 		return child_thread->tid;
@@ -184,17 +184,11 @@ int open(const char *file){
 	if (f == NULL){
 		return -1;
 	}
-	struct thread *curr = thread_current();
-	int fd;
-	for(fd=2; fd<MAX_FD; fd++){
-		if(curr->fd_table[fd]==NULL){
-			curr->fd_table[fd] = f;		// 해당 파일 객체에 파일 디스크립터 부여
-			// curr->max_fd = fd +1;
-			return fd;		// 파일 디스크립터 리턴
-		}
+	int fd = process_add_file(f);
+	if (fd ==- 1){
+		file_close(f);		// fd_table에 빈 공간이 없을 경우 파일 닫기
 	}
-	file_close(f);		// fd_table에 빈 공간이 없을 경우 파일 닫기  
-	return -1;
+	return fd;
 }
 
 // 파일의 크기를 알려주는 시스템 콜  
@@ -285,14 +279,6 @@ unsigned tell (int fd){
 
 // 열린 파일을 닫는 시스템 콜   
 void close (int fd){
-	if (fd <0 || fd >= MAX_FD){
-		return;
-	}
-	struct thread *curr = thread_current();
-	struct file *f = curr->fd_table[fd];
-	if (f != NULL){
-		file_close(f);
-		curr -> fd_table[fd] = NULL;
-	}
+	process_close_file(fd);
 }
 /* add function gdy_pro2*/

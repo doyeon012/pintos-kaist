@@ -124,6 +124,7 @@ struct thread
 
 	struct file *fd_table[MAX_FD]; // 파일 디스크립터 테이블
 	int max_fd;					// 현재 테이블에 존재하는 fd값의 최대값 +1;
+	struct file *running;
 
 	/* add code_pro2*/
 
