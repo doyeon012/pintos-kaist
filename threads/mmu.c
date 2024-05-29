@@ -144,6 +144,7 @@ pdp_for_each (uint64_t *pdp,
 }
 
 /* Apply FUNC to each available pte entries including kernel's. */
+// 각 사용 가능한 페이지 테이블 항목에 대해 FUNC를 적용, 커널을 포함하여 모든 페이지 테이블 항목에 적용  
 bool
 pml4_for_each (uint64_t *pml4, pte_for_each_func *func, void *aux) {
 	for (unsigned i = 0; i < PGSIZE / sizeof(uint64_t *); i++) {

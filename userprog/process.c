@@ -149,6 +149,8 @@ initd(void *f_name)
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
+// 현재 프로세스를 name으로 복제   
+// 새로운 프로세스의 스레드 id를 반환, 스레드를 생성할 수 없는 경우 tid_error를 반환   
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
@@ -159,6 +161,8 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+
+// 부모의 주소 공간을 복제하기 위해 이 함수를 pml4_for_each에 전달
 static bool
 duplicate_pte(uint64_t *pte, void *va, void *aux)
 {
@@ -169,22 +173,29 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	// TODO: 만약 부모 페이지가 커널 페이지라면 즉시 반환   
 
 	/* 2. Resolve VA from the parent's page map level 4. */
+
+	// TODO: 부모의 맵 레벨 4에서 가상주소를 해석   
 	parent_page = pml4_get_page(parent->pml4, va);
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	// 자식을 위해 새로운 PAL_USER 페이지를 할당하고 결과를 NEWPAGE로 설정   
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	// 부모의 페이지를 새 페이지로 복제하고 부모 페이지가 쓰기 가능한지 확인 (결과에 따라 WRITABLE을 설정)  
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	// WRITABLE 권한으로 주소 VA에서 자식의 페이지 테이블에 새 페이지를 추가  
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		// 페이지 삽입에 실패하면 오류 처리를 수행   
 	}
 	return true;
 }
@@ -194,6 +205,9 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
+
+// 부모의 실행 컨텍스트를 복사하는 스레드 함수  
+// parent->tf는 프로세스의 userland 컨텍스트를 보유하지 않는다. 즉 process_fork의 두 번째 인수를 이 함수에 전달해야 한다. 
 static void
 __do_fork(void *aux)
 {
@@ -201,10 +215,12 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	/*TODO: 어떻게든 부모의 인터럽트 프레임(parent_if)를 전달 (process_fork()'s의 if_)*/
 	struct intr_frame *parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
+	/* cpu 컨텍스트를 로컬 스택으로 읽어 들인다.*/
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
 
 	/* 2. Duplicate PT */
@@ -228,9 +244,12 @@ __do_fork(void *aux)
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	// 파일 객체를 복제 하려면  include/filesys/file.h에 있는 file_duplicate를 사용
+	// 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안된다.  
 	process_init();
 
 	/* Finally, switch to the newly created process. */
+	// 새로 생성된 프로세스로 전환   
 	if (succ)
 		do_iret(&if_);
 error:

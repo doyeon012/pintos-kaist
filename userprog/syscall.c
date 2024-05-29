@@ -30,6 +30,7 @@ int read(int fd, void *buffer, unsigned size);
 int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
+tid_t fork (const char *thread_name);
 
 /* add function gdy_pro2*/
 
@@ -77,7 +78,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_EXIT:
 		exit(f->R.rdi);
 		break;
-	// case SYS_FORK:
+	case SYS_FORK:
+		f->R.rax = fork(f->R.rdi);
+		break;
 	case SYS_EXEC:
 		f->R.rax = exec(f->R.rdi);
 		break;
@@ -301,5 +304,9 @@ unsigned tell(int fd)
 void close(int fd)
 {
 	process_close_file(fd);
+}
+
+tid_t fork (const char *thread_name){
+
 }
 /* add function gdy_pro2*/
