@@ -16,8 +16,8 @@ Executing 'read-stdout':
 (read-stdout) end
 read-stdout: exit(0)
 Execution of 'read-stdout' complete.
-Timer: 119 ticks
-Thread: 62 idle ticks, 48 kernel ticks, 10 user ticks
+Timer: 118 ticks
+Thread: 57 idle ticks, 51 kernel ticks, 11 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes

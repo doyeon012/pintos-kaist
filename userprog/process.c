@@ -90,7 +90,7 @@ initd (void *f_name) {
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
- * TID_ERROR if the thread cannot be created. */
+ * TID_ERROR if the thread cannot be created. 현재 스레드를 복사, 자식 스레드를 생성 */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
@@ -107,7 +107,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct thread *child = get_child_process(pid);
 
 	// 현재 스레드는 생성만 완료된 상태이다. 생성되어서 ready_list에 들어가고 실행될 때 __do_fork 함수가 실행된다.
-	// __do_fork 함수가 실행되어 로드가 완료될 때까지 부모는 대기한다.
+	// __do_fork 함수가 실행되어 자식load가 완료될 때까지 부모는 대기
 	sema_down(&child->load_sema);
 
 	// 자식이 로드되다가 오류로 exit한 경우
@@ -173,7 +173,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;// 부모 프로세스의 정보
 	struct thread *current = thread_current ();// 현재 실행 중인 자식 프로세스
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->parent_if;//부모의 interruptFrame를 가져옴
+	struct intr_frame *parent_if = &parent->parent_if;//부모thread의 if를 가져옴
 	bool success = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -314,16 +314,18 @@ process_wait (tid_t child_tid UNUSED) {
     return child->exit_status; // 5) 자식의 exit_status를 반환한다.
 }
 
-/* Exit the process. This function is called by thread_exit (). */
+/* Exit the process. This function is called by thread_exit (). 
+ * 자원 해제 순서: 파일 닫기 -> fdt 해제 -> 현재 실행 파일 닫기
+*/
 void
 process_exit (void) {
 	 struct thread *curr = thread_current();
 	 //fdt의 모든 파일을 닫음.
-	 for(int i = 2; i< 128; i++){
+		for(int i = 2; i< 128; i++){
 		if(curr->fdt[i] != NULL)close(i);//파일 닫기
 	 }
-	 palloc_free_multiple(curr->fdt, FDT_PAGES);//fdt 해제
-	 file_close(curr->running);//현재 실행 중인 파일도 닫음.
+	 if(curr->fdt != NULL) palloc_free_page(curr->fdt);//fdt 해제. multi-oom?
+	 if(curr->running != NULL) file_close(curr->running);//현재 실행 중인 파일도 닫음.
 
 	process_cleanup ();
 	//종료 중인 스레드가 자신의 종료를 기다리고 있는 부모 스레드에게 sig를 보냄. 부모가 대기에서 깨어남.
@@ -813,8 +815,9 @@ int process_add_file(struct file *f)
 	struct file **fdt = curr->fdt;
 
 	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
-	while (curr->next_fd < 128 && fdt[curr->next_fd])
+	while (curr->next_fd < 128 && fdt[curr->next_fd]){
 		curr->next_fd++;
+	}
 	if (curr->next_fd >= 128)
 		return -1;
 	fdt[curr->next_fd] = f;

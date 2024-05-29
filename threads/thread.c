@@ -254,9 +254,11 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	//현재 스레드의 자식으로 추가. 가장 최근에 추가시켜줌.
 	list_push_back(&(thread_current()->child_list), &(t->child_elem));
 
-	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);//fdt 할당
-	if(t->fdt == NULL) return TID_ERROR;
-
+	t->fdt = palloc_get_page(PAL_ZERO);//fdt 할당
+	if(t->fdt == NULL) {
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
 	/* Add to run queue. */
 	thread_unblock (t);
 	thread_preemptive(); //ready_list의 앞 부분과 비교해서 ready_list의 값이 더 클 경우 yield

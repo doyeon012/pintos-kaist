@@ -20,7 +20,7 @@ Executing 'args-none':
 args-none: exit(0)
 Execution of 'args-none' complete.
 Timer: 122 ticks
-Thread: 44 idle ticks, 64 kernel ticks, 15 user ticks
+Thread: 47 idle ticks, 60 kernel ticks, 15 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes

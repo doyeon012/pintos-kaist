@@ -23,8 +23,8 @@ Executing 'lg-seq-random':
 (lg-seq-random) end
 lg-seq-random: exit(0)
 Execution of 'lg-seq-random' complete.
-Timer: 223 ticks
-Thread: 79 idle ticks, 58 kernel ticks, 87 user ticks
+Timer: 226 ticks
+Thread: 94 idle ticks, 57 kernel ticks, 75 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 506 reads, 686 writes
 hd1:0: 107 reads, 0 writes
