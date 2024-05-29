@@ -5,6 +5,7 @@
     "syscall.h": "c",
     "synch.h": "c",
     "console.h": "c",
-    "process.h": "c"
+    "process.h": "c",
+    "*.inc": "c"
   }
 }

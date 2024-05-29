@@ -337,6 +337,7 @@ int process_exec(void *f_name)
 	// 메모리 적재 완료 -> 부모 프로세스 다시 진행   
 	sema_up(&thread_current()->sema_load);    // 
 
+
 	/* add code - gdy_pro2*/
 	
 	 
@@ -353,10 +354,10 @@ int process_exec(void *f_name)
 	// argument_stack으로 parse를 전달해준 이후에 palloc_free_page를 통해 file_name이 가리키는 메모리를 해제한다.
 	palloc_free_page(file_name);
 	if (!success){
-		remove_child_process(thread_current());			// load 실패 -> 프로그램에 메모리적재 실패 시 child_list에서 삭제 
+		// remove_child_process(thread_current());			// load 실패 -> 프로그램에 메모리적재 실패 시 child_list에서 삭제 
 		// palloc_free_page(thread_current());
-		thread_exit();		//
-		// return -1;
+		// thread_exit();		//
+		return -1;
 	}
 	
 	/* Start switched process. */
@@ -380,9 +381,11 @@ int process_wait(tid_t child_tid UNUSED)
 		return -1;
 	}
 	sema_down(&t->sema_exit);    // sema  매개변수 설정 ??
+	int exit_s = t->exit_status;
 	remove_child_process(t);		// 스레드 메모리 해제 ????
 	// palloc_free_page(t);
-	return t->exit_status;
+	// return t->exit_status;
+	return exit_s;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -393,6 +396,7 @@ void process_exit(void)
 	}
 	// file_close(thread_current()->running);		// add_code, 실행중인 파일도 닫기 (load에서 갱신)
 	process_cleanup();
+	sema_up(&thread_current()->sema_exit);	// 부모 프로세스가 ready_list에 들어갈 수 있도록 sema_up
 }
 
 /* Free the current process's resources. */

@@ -23,18 +23,17 @@ bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 void check_address(void *addr);
 tid_t exec(const char *cmd_line);
-int wait (tid_t tid);
+int wait(tid_t tid);
 int open(const char *file);
 int filesize(int fd);
 int read(int fd, void *buffer, unsigned size);
-int write (int fd, void *buffer, unsigned size);
+int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
-unsigned tell (int fd);
-
+unsigned tell(int fd);
 
 /* add function gdy_pro2*/
 
-struct lock filesys_lock;		// file에 대한 동시 접근을 방지하기 위한 lock
+struct lock filesys_lock; // file에 대한 동시 접근을 방지하기 위한 lock
 
 /* System call.
  *
@@ -68,7 +67,7 @@ void syscall_init(void)
 void syscall_handler(struct intr_frame *f UNUSED)
 {
 	// printf("system call!\n");
-	int syscall_number = f->R.rax;		// rax에 시스템 콜 넘버가 저장되어 있음  
+	int syscall_number = f->R.rax; // rax에 시스템 콜 넘버가 저장되어 있음
 	// printf("syscall number %d\n",syscall_number);		// 10
 	switch (syscall_number)
 	{
@@ -98,20 +97,20 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
-		f->R.rax = read(f->R.rdi,f->R.rsi,f->R.rdx);
+		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
-		f->R.rax = write(f->R.rdi,f->R.rsi,f->R.rdx);
+		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
-		seek(f->R.rdi,f->R.rsi);
+		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL:
 		f->R.rax = tell(f->R.rdi);
 		break;
-	// case SYS_CLOSE:
-	// 	f->R.rax = remove(f->R.rdi);
-	// 	break;
+	case SYS_CLOSE:
+		close(f->R.rdi);
+		break;
 	default:
 		thread_exit();
 		break;
@@ -152,7 +151,7 @@ void check_address(void *addr)
 }
 
 // 자식 프로세스를 생성하고 프로그램을 실행시키는 시스템 콜
-tid_t exec(const char *cmd_line)           // 자식  프로세스 생성 xxx????
+tid_t exec(const char *cmd_line) // 자식  프로세스 생성 xxx????
 {
 	check_address(cmd_line);
 	tid_t child_tid = process_create_initd(cmd_line);			// 자식 프로세스 생성
@@ -164,121 +163,143 @@ tid_t exec(const char *cmd_line)           // 자식  프로세스 생성 xxx???
 	sema_down(&child_thread->sema_load); // 자식 프로세스의 프로그램이 적재될 때까지 대기          // sema_down 매개변수 ??
 	if (child_thread->is_program_loaded)
 	{ // 프로그램 적재 성공 시 자식 프로세스의 tid 리턴
-		return child_thread->tid;
+		// return child_thread->tid;
+		return;
 	}
 	else
 	{
-		return -1; // 프로그램 적재 실패 시 -1 리턴
+		return child_thread->exit_status = -1; // 프로그램 적재 실패 시 -1 리턴
 	}
 }
 
-// 자식 프로세스가 수행되고 종료될 때 까지 대기   
-int wait (tid_t tid){
+// 자식 프로세스가 수행되고 종료될 때 까지 대기
+int wait(tid_t tid)
+{
 	process_wait(tid);
 }
 
-// 파일을 열 때 사용하는 시스템 콜  
-int open(const char *file){
+// 파일을 열 때 사용하는 시스템 콜
+int open(const char *file)
+{
 	check_address(file);
-	struct file *f = filesys_open(file);		// 파일 open
-	if (f == NULL){
+	struct file *f = filesys_open(file); // 파일 open
+	if (f == NULL)
+	{
 		return -1;
 	}
 	int fd = process_add_file(f);
-	if (fd ==- 1){
-		file_close(f);		// fd_table에 빈 공간이 없을 경우 파일 닫기
+	if (fd == -1)
+	{
+		file_close(f); // fd_table에 빈 공간이 없을 경우 파일 닫기
 	}
 	return fd;
 }
 
-// 파일의 크기를 알려주는 시스템 콜  
-int filesize(int fd){
+// 파일의 크기를 알려주는 시스템 콜
+int filesize(int fd)
+{
 	struct thread *curr = thread_current();
-	if (fd < 2 || fd >= MAX_FD || curr->fd_table[fd] == NULL){
-		return -1;		// 해당 파일이 존재하지 않는 경우 -1 return 
+	if (fd < 2 || fd >= MAX_FD || curr->fd_table[fd] == NULL)
+	{
+		return -1; // 해당 파일이 존재하지 않는 경우 -1 return
 	}
 	struct file *f = curr->fd_table[fd];
 	return file_length(f);
 }
 
-// 열린 파일의 데이터를 읽는 시스템 콜  
-int read(int fd, void *buffer, unsigned size){
+// 열린 파일의 데이터를 읽는 시스템 콜
+int read(int fd, void *buffer, unsigned size)
+{
 	check_address(buffer);
 	struct thread *curr = thread_current();
-	lock_acquire(&filesys_lock);		// 파일에 동시 접근이 일어날 수 있으므로 lock 사용
-	if (fd<0 || fd >= MAX_FD || buffer == NULL){
+	lock_acquire(&filesys_lock); // 파일에 동시 접근이 일어날 수 있으므로 lock 사용
+	if (fd < 0 || fd >= MAX_FD || buffer == NULL)
+	{
+		lock_release(&filesys_lock);
 		return -1;
 	}
-	if (fd == 0){		// fd가 0 일 경우 키보드에 입력을 버퍼에 저장 후 버퍼의 저장한 크기 리턴
-		for(int i = 0; i<size; i++){
+	if (fd == 0)
+	{ // fd가 0 일 경우 키보드에 입력을 버퍼에 저장 후 버퍼의 저장한 크기 리턴
+		for (int i = 0; i < size; i++)
+		{
 			((char *)buffer)[i] = input_getc();
 		}
 		lock_release(&filesys_lock);
 		return size;
 	}
 	struct file *f = curr->fd_table[fd];
-	if (f == NULL){
+	if (f == NULL)
+	{
 		lock_release(&filesys_lock);
 		return -1;
 	}
-	int bytes_read = file_read(f,buffer, size);		// fd가 0이 아닐 경우 파일의 데이터를 크기만큼 저장 후 읽은 바이트 수 리턴  
+	int bytes_read = file_read(f, buffer, size); // fd가 0이 아닐 경우 파일의 데이터를 크기만큼 저장 후 읽은 바이트 수 리턴
 	lock_release(&filesys_lock);
 	return bytes_read;
-
 }
 
-// 열린 파일의 데이터를 기록 하는 시스템 콜  
-int write (int fd, void *buffer, unsigned size){
+// 열린 파일의 데이터를 기록 하는 시스템 콜
+int write(int fd, void *buffer, unsigned size)
+{
 	check_address(buffer);
-	lock_acquire(&filesys_lock);		// 파일에 동시 접근이 일어날 수 있으므로 lock 사용
-	struct thread *curr=  thread_current();
-	if (fd < 1 || fd >= MAX_FD || buffer == NULL){
+	lock_acquire(&filesys_lock); // 파일에 동시 접근이 일어날 수 있으므로 lock 사용
+	struct thread *curr = thread_current();
+	if (fd < 1 || fd >= MAX_FD || buffer == NULL)
+	{
 		lock_release(&filesys_lock);
 		return -1;
 	}
-	if (fd == 1){	// fd값이 1일 경우 버퍼에 저장된 값을 화면에 출력 후 버퍼의 크기 리턴
-		putbuf((char *)buffer,size);
+	if (fd == 1)
+	{ // fd값이 1일 경우 버퍼에 저장된 값을 화면에 출력 후 버퍼의 크기 리턴
+		putbuf((char *)buffer, size);
 		lock_release(&filesys_lock);
 		return size;
 	}
 	struct file *f = curr->fd_table[fd];
-	if (f == NULL){
+	if (f == NULL)
+	{
 		lock_release(&filesys_lock);
 		return -1;
 	}
 
-	int bytes_written = file_write(f,buffer,size);
+	int bytes_written = file_write(f, buffer, size);
 	lock_release(&filesys_lock);
 	return bytes_written;
-
 }
 
-// 열린 파일의 위치(offset)를 이동하는 시스템 콜   
-void seek(int fd, unsigned position){
-	if (fd <0 || fd >= MAX_FD){
+// 열린 파일의 위치(offset)를 이동하는 시스템 콜
+void seek(int fd, unsigned position)
+{
+	if (fd < 0 || fd >= MAX_FD)
+	{
 		return;
 	}
 	struct thread *curr = thread_current();
 	struct file *f = curr->fd_table[fd];
-	if (f != NULL){
-		file_seek(f,position);
+	if (f != NULL)
+	{
+		file_seek(f, position);
 	}
 }
 
-// 열린 파일의 위치(offset)를 알려주는 시스템 콜   
-unsigned tell (int fd){
-	if (fd <0 || fd >= MAX_FD){
+// 열린 파일의 위치(offset)를 알려주는 시스템 콜
+unsigned tell(int fd)
+{
+	if (fd < 0 || fd >= MAX_FD)
+	{
 		return;
 	}
 	struct thread *curr = thread_current();
 	struct file *f = curr->fd_table[fd];
-	if (f != NULL){
+	if (f != NULL)
+	{
 		return file_tell(f);
 	}
 }
 
-// 열린 파일을 닫는 시스템 콜   
-void close (int fd){
+// 열린 파일을 닫는 시스템 콜
+void close(int fd)
+{
 	process_close_file(fd);
 }
 /* add function gdy_pro2*/

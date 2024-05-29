@@ -248,16 +248,17 @@ tid_t thread_create(const char *name, int priority,
 
 	/* add code_pro2*/
 	// t->pid = tid;									  // pid 값에 tid 값을 넣음
-	struct thread *curr = thread_current();			  // 현재 실행중인 프로세스가 부모 프로세스이다.
-	t->parent_process = curr;						  // 부모 프로세스 저장
-	t->is_program_loaded = 0;						  // 프로그램이 로드되지 않음
-	t->is_program_exit = 0;							  // 프로그램이 종료되지 않음
-	sema_init(&t->sema_load, 0);					  // load 세마포어 0으로 초기화
-	sema_init(&t->sema_exit, 0);					  // exit 세마포어 0으로 초기화
+	struct thread *curr = thread_current();		   // 현재 실행중인 프로세스가 부모 프로세스이다.
+	t->parent_process = curr;					   // 부모 프로세스 저장
+	t->is_program_loaded = 0;					   // 프로그램이 로드되지 않음
+	t->is_program_exit = 0;						   // 프로그램이 종료되지 않음
+	sema_init(&t->sema_load, 0);				   // load 세마포어 0으로 초기화
+	sema_init(&t->sema_exit, 0);				   // exit 세마포어 0으로 초기화
 	list_push_back(&curr->child_list, &t->c_elem); // 부모 프로세스의 자식리스트에 추가
-	
-	t->max_fd= 2;		// fd 값 초기화   
-	
+	t->fd_table[0] = 0;
+	t->fd_table[1] = 1;
+	t->max_fd = 2; // fd 값 초기화
+
 	/* add code_pro2*/
 
 	/* Add to run queue. */
@@ -354,9 +355,9 @@ void thread_exit(void)
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable();
 	struct thread *curr = thread_current();
-	// curr->is_program_exit = 1;	// 프로세스 종료 알림 -> ??이거 어디 반영?  
-	sema_up(&curr->sema_exit);	// 부모 프로세스가 ready_list에 들어갈 수 있도록 sema_up
+	// curr->is_program_exit = 1;	// 프로세스 종료 알림 -> ??이거 어디 반영?
 	do_schedule(THREAD_DYING);
+	// sema_up(&curr->sema_exit);	// 부모 프로세스가 ready_list에 들어갈 수 있도록 sema_up
 	NOT_REACHED();
 }
 
@@ -556,7 +557,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	/* add code_pro2*/
 	list_init(&t->child_list); // 자식 리스트 초기화
-	/* add code_pro2*/
+							   /* add code_pro2*/
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
