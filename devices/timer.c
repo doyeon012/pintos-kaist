@@ -88,7 +88,7 @@ timer_elapsed (int64_t then) { // then 이후 경과된 시간(ticks)을 반환
 	return timer_ticks () - then;
 }
 
-// 특정한 시간 동안 현재 실행 중인 스레드를 재우기 위해 사용
+// // 특정한 시간 동안 현재 실행 중인 스레드를 재우기 위해 사용
 void
 timer_sleep(int64_t ticks)
     {	
@@ -126,7 +126,7 @@ timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
-// 매 tick마다 깨울 스레드가 있는지 확인.
+
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
@@ -151,10 +151,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
 			mlfqs_recalc_recent_cpu();
 		}
 	}
-	
-	thread_wakeup(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
+	wake_up(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
 }
-  
+
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

@@ -1,31 +1,3 @@
-/* This file is derived from source code for the Nachos
-   instructional operating system.  The Nachos copyright notice
-   is reproduced in full below. */
-
-/* Copyright (c) 1992-1996 The Regents of the University of California.
-   All rights reserved.
-
-   Permission to use, copy, modify, and distribute this software
-   and its documentation for any purpose, without fee, and
-   without written agreement is hereby granted, provided that the
-   above copyright notice and the following two paragraphs appear
-   in all copies of this software.
-
-   IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO
-   ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR
-   CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE
-   AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA
-   HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-   THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY
-   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-   PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS"
-   BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATION TO
-   PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
-   MODIFICATIONS.
-   */
-
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
@@ -133,7 +105,7 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
-	thread_preemption();
+	thread_preemtive();
 	intr_set_level (old_level);
 }
 
@@ -188,29 +160,6 @@ sema_test_helper (void *sema_) {
    onerous, it's a good sign that a semaphore should be used,
    instead of a lock. */
 
-// void remove_donor(struct lock *lock)
-// {
-//     struct list *donations = &(thread_current()->donations); // 현재 스레드의 donations
-//     struct list_elem *donor_elem;    // 현재 스레드의 donations의 요소
-//     struct thread *donor_thread;
-
-//     if (list_empty(donations))
-//         return;
-
-//     donor_elem = list_front(donations);
-
-//     while (1)
-//     {
-//         donor_thread = list_entry(donor_elem, struct thread, d_elem);
-//         if (donor_thread->wait_on_lock == lock)           // 현재 release될 lock을 기다리던 스레드라면
-//             list_remove(&donor_thread->d_elem); // 목록에서 제거
-//         donor_elem = list_next(donor_elem);
-//         if (donor_elem == list_end(donations))
-//             return;
-//     }
-// }
-
-
 // 락을 초기화
 void
 lock_init (struct lock *lock) {
@@ -249,37 +198,35 @@ lock_acquire (struct lock *lock) {
 			current_thread->wait_on_lock = lock; // 현재 스레드는 'wait_on_lock' 필드에 이 락을 저장
 			
 			// 락 소유자의 'donations' 리스트에 현재 스레드를 우선순위에 따라 삽입
-			list_insert_ordered(&lock->holder->donations, &current_thread->d_elem, donation_cmp_priority, NULL);
+			list_insert_ordered(&lock->holder->donations, &current_thread->d_elem, cmp_priority_donation , NULL);
 
 			// mlfqs 활성화 시 donataion 함수 비활성화
 			if(!thread_mlfqs)
 			{
 
-			// 우선순위 기부 처리(nested donataion)
-			while (current_thread->wait_on_lock != NULL)
-			{
-			{
-
-				// 락 소유자 가져오기
-				struct thread *holder = current_thread->wait_on_lock->holder;
-
-				// 우선순위 비교 및 업데이트
-				if (holder->priority < current_thread->priority)
+				// 우선순위 기부 처리(nested donataion)
+				while (current_thread->wait_on_lock != NULL)
 				{
-					// 락 소유자의 우선순위를 > 현재 스레드의 우선순위에 기부
-					holder->priority = current_thread->priority;
-					//현재스레드 = 락 소유자로 변경
-					current_thread = holder;
-				} 
-				else
-				{
-					break; 
+
+					// 락 소유자 가져오기
+					struct thread *holder = current_thread->wait_on_lock->holder;
+
+					// 우선순위 비교 및 업데이트
+					if (holder->priority < current_thread->priority)
+					{
+						// 락 소유자의 우선순위를 > 현재 스레드의 우선순위에 기부
+						holder->priority = current_thread->priority;
+						//현재스레드 = 락 소유자로 변경
+						current_thread = holder;
+					} 
+					else
+					{
+						break; 
+					}
 				}
-			}
-			}
 			
+			}
 		}
-	}
 	}		
 	// 락 흭득 시도(이 과정에서 세마포어 값이 0이면 현재 스레드는 블록)
 	sema_down (&lock->semaphore);
@@ -321,52 +268,54 @@ lock_try_acquire (struct lock *lock) {
 
 // 락을 해제한다.
 // 잠금이 해제되면 기부 목록에서 잠금이 설정된 스레드를 삭제하고 우선 순위를 올바르게 설정
-void
-lock_release (struct lock *lock) {
-	// mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화
-	ASSERT (lock != NULL);
-	ASSERT (lock_held_by_current_thread (lock));
+void lock_release(struct lock *lock)
+{
+	ASSERT(lock != NULL);
+	ASSERT(lock_held_by_current_thread(lock)); // 현재 쓰레드가 lock을 보유하고 있는지 확인
 
-	// remove_donor(lock);
-	lock->holder = NULL;
+	struct thread *curr = lock->holder;								// 해제할 lock을 가지고 있는 쓰레드 curr
+	struct list_elem *donation_elem = list_begin(&curr->donations); // 해제할 lock을 기다리고 있는 쓰레드들의 우선순위가 가장 높은 list_elem => donation_elem
 
-	if(!thread_mlfqs)
-	{
-		struct list_elem *e;
-		struct thread *current_thread_donation = &thread_current()->donations;
-
-		// 현재 스레드가 소유한 'donations'리스트를 순회하며, 'wait_on_lockl'이 해제하려는 'lock'인 스레드를 찾기 = 기부 목록에서 기부된 스레드 제거
-		for(e = list_begin(current_thread_donation); e != list_end(current_thread_donation); e = list_next(e))
-		{	
-			// 기부 목록에서 스레드 추출
-			struct thread *t = list_entry(e, struct thread, d_elem);
-
-			// 특정 락을 기다리는지 확인
-			if (t->wait_on_lock == lock)
-			{
-				list_remove(&t->d_elem);
-			}
+	while (!list_empty(&curr->donations) && donation_elem != list_tail(&curr->donations)) // donation이 empty가 아니고, donation_elem이 tail이 아닐 때까지
+	{																					  // lock을 가지고 있던 쓰레드의 donations 목록에 wait_on_lock으로 lock을 가지고 있던 쓰레도 모두 삭제
+		struct thread *donation_thread = list_entry(donation_elem, struct thread, d_elem);
+		if (donation_thread->wait_on_lock == lock)
+		{
+			donation_elem = list_remove(donation_elem); // 해당 쓰레드 삭제하고 remove로 반환된 elem값을 donation_elem으로 받아서 donation_elem 갱신
 		}
-
-	
-		//우선 순위 복원(왜? 단순히 원래 우선순위로 간다면, 남아있는 다른 락이 뺐긴다)
-		thread_current()->priority = thread_current()->original_priority;
-
-		// 기부받은 우선순위 확인 및 조정(multiple donation 처리)
-		if(!list_empty(current_thread_donation)) //현재 스레드가 기부받은 우선순위가 있는지 확인
-		{	
-			// 최대 기부 우선순위 찾기.
-		struct thread *max_donor = list_entry(list_front(current_thread_donation), struct thread, d_elem);
-				
-			// 우선순위 조정
-			if(max_donor->priority > thread_current()->priority) // 기부받은 스레드의 우선순위가 현재 스레드의 우선순위보다 높은경우
-			{
-				thread_current()->priority = max_donor->priority; // 현재 스레드의 우선순위를 기부받은 우선 순위로 설정
-			}
+		else
+		{
+			donation_elem = donation_elem->next; // wait_on_lock 값이 lock이 아닌 쓰레드라면 다음 쓰레드로 donation_elem 갱신
 		}
 	}
-	
-	sema_up (&lock->semaphore);
+	// 우선 순위 기부
+	// do - while 문을 사용하여 갱신이 안되는 경우가 없도록 하였다.
+	if (!thread_mlfqs)
+	{ // mlfq일 경우 우선순위 기부 적용 x
+		do
+		{
+			curr->priority = curr->org_priority; // 기부 받았던 priority를 반납
+			if (!list_empty(&curr->donations))	 // donations가 비어있지 않을 경우 갱신된 donations 리스트에서 첫번째 값으로 우선순위 갱신
+			{
+				struct thread *donation_first = list_entry(list_begin(&curr->donations), struct thread, d_elem);
+				if (curr->priority < donation_first->priority)
+				{
+					curr->priority = donation_first->priority;
+				}
+			}
+			// donations가 비어있을 경우
+			// while문 들어가기전이므로 wait_on_lock이 있는지 확인한다.
+			// 이 조건이 없으면 wait_on_lock이 null일 경우 holder를 찾지 못해 error가 나타난다.
+			if (curr->wait_on_lock == NULL)
+			{
+				break;
+			}
+			curr = curr->wait_on_lock->holder; // wait_on_lock이 null이 아닐경우 holder 쓰레드로 이동한다.
+		} while (curr->wait_on_lock != NULL);
+	}
+	//
+	lock->holder = NULL; // lock 해제
+	sema_up(&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -517,4 +466,3 @@ cmp_sema_priority(const struct list_elem *a, const struct list_elem *b,  void *a
 	// 우선순위 비교
 	return s_a->priority > s_b->priority;
 }
-
