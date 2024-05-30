@@ -259,6 +259,7 @@ tid_t thread_create(const char *name, int priority,
 	t->fd_table[0] = 0;
 	t->fd_table[1] = 1;
 	t->max_fd = 2; // fd 값 초기화
+	t->exit_status = 0;
 
 	/* add code_pro2*/
 
@@ -555,7 +556,7 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->nice = 0;							 // add code
 	t->recent_cpu = 0;						 // add code
 	list_push_back(&all_list, &t->all_elem); // add code	// 모든 thread가 초기화 될 때 all_list에 넣어준다.
-
+	t->running = NULL;
 	/* add code_pro2*/
 	list_init(&t->child_list); // 자식 리스트 초기화
 							   /* add code_pro2*/

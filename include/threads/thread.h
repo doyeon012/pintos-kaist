@@ -30,7 +30,7 @@ typedef int tid_t;
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
-#define MAX_FD 128		// 테이블 최대 크기   
+#define MAX_FD 64		// 테이블 최대 크기   
 
 /* A kernel thread or user process.
  *
@@ -118,15 +118,15 @@ struct thread
 	struct list child_list;		   // 자식 리스트
 	bool is_program_loaded;		   // 프로세스의 프로그램 메모리 적재 유무
 	bool is_program_exit;		   // 프로세스 종료 유무 확인
-	struct semaphore sema_load;	   // load 세마포어
+	struct semaphore sema_load;	   // load 세마포어		// fork에 사용 
 	struct semaphore sema_exit;	   // exit 세마포어
-	struct semaphore sema_wait;    // wait  세마포어 // fork에 사용  
+	struct semaphore sema_wait;    // wait  세마포어  
 	int exit_status;			   // exit 호출 시 종료 status
 
 	struct file *fd_table[MAX_FD]; // 파일 디스크립터 테이블
 	int max_fd;					// 현재 테이블에 존재하는 fd값의 최대값 +1;
-	// struct file *running;
-	struct intr_frame parent_if;
+	struct file *running;
+	struct intr_frame *parent_if;
 
 	/* add code_pro2*/
 

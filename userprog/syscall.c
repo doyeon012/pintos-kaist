@@ -13,6 +13,9 @@
 #include "devices/input.h"
 #include "filesys/file.h"
 #include "lib/kernel/console.h"
+#include "threads/palloc.h"
+#include "lib/string.h"
+#include "threads/mmu.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -85,7 +88,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT:
-		wait(f->R.rdi);
+		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE:
 		f->R.rax = create(f->R.rdi, f->R.rsi);
@@ -147,7 +150,7 @@ bool remove(const char *file)
 // 주소 값이 유저 영역에서 사용하는 주소 값인지 확인
 void check_address(void *addr)
 {
-	if (addr == NULL || !is_user_vaddr(addr))
+	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
 	}
@@ -157,28 +160,20 @@ void check_address(void *addr)
 tid_t exec(const char *cmd_line) // 자식  프로세스 생성 xxx????
 {
 	check_address(cmd_line);
-	tid_t child_tid = process_create_initd(cmd_line);			// 자식 프로세스 생성
-	struct thread *child_thread = get_child_process(child_tid); // 생성된 자식 프로세스 검색
-	if (child_thread == NULL)
-	{
-		return -1;
-	}
-	sema_down(&child_thread->sema_load); // 자식 프로세스의 프로그램이 적재될 때까지 대기          // sema_down 매개변수 ??
-	if (child_thread->is_program_loaded)
-	{ // 프로그램 적재 성공 시 자식 프로세스의 tid 리턴
-		// return child_thread->tid;
-		return;
-	}
-	else
-	{
-		return child_thread->exit_status = -1; // 프로그램 적재 실패 시 -1 리턴
-	}
+	char *cmd_line_copy;
+    cmd_line_copy = palloc_get_page(0);
+    if (cmd_line_copy == NULL)
+        exit(-1);                              // 메모리 할당 실패 시 status -1로 종료한다.
+    strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
+    // 스레드의 이름을 변경하지 않고 바로 실행한다.
+    if (process_exec(cmd_line_copy) == -1)
+        exit(-1); // 실패 
 }
 
 // 자식 프로세스가 수행되고 종료될 때 까지 대기
 int wait(tid_t tid)
 {
-	process_wait(tid);
+	return process_wait(tid);
 }
 
 // 파일을 열 때 사용하는 시스템 콜
