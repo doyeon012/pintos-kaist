@@ -154,8 +154,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 	wake_up(ticks); // 일어날 시간이 된 스레드 > ready_list로 이동시키는 함수 호출
 }
 
-
-
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
 static bool

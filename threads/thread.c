@@ -883,9 +883,9 @@ allocate_tid(void)
 	return tid;
 }
 
-// // 특정 시간 동안 현재 실행 중인 스레들을 재우기 위해
-// // 주어진 틱 수 동안 스레드를 일시 중단하고, 지정된 시간이 지나면 깨운다.
-// // 틱(타이머 인터럽트 발생 주기)
+// 특정 시간 동안 현재 실행 중인 스레들을 재우기 위해
+// 주어진 틱 수 동안 스레드를 일시 중단하고, 지정된 시간이 지나면 깨운다.
+// 틱(타이머 인터럽트 발생 주기)
 void 
 thread_sleep(int64_t ticks)
     {
@@ -913,6 +913,7 @@ thread_sleep(int64_t ticks)
 		// 7. 인터럽트 복원
         intr_set_level(old_level); 
     }
+
 
 
 bool find_less_tick(const struct list_elem *a_, const struct list_elem *b_,
@@ -956,9 +957,6 @@ wake_up(int64_t current_ticks)
 		// 5. 인터럽트 복원
         intr_set_level(old_level); // 인터럽트 상태를 원래 상태로 변경
     }
-
-
-
 
 // global_tick 값을 넘겨주기 위한 함수
 int64_t get_global_tick(void)
